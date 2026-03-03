@@ -73,7 +73,7 @@ def mirror_ref_RoC_sagittal(effective_RoC, theta_AOI):
     matrix = [[1, 0], [-2 / R_s, 1]]
     return sp.Matrix(matrix)
 
-
+# In this convention free space and a uniform medium have the same ABCD matrix
 def free_propagation(length):
     matrix = [[1, length], [0, 1]]
     return sp.Matrix(matrix)
@@ -87,11 +87,6 @@ def dielectric_interface(ref_idx1, ref_idx2):
 def dielectric_interface_curved(ref_idx1, ref_idx2, RoC):
     matrix1 = sp.Matrix([[1, 0], [(ref_idx1 - ref_idx2) / (ref_idx2 * RoC), ref_idx1 / ref_idx2]])
     return matrix1
-
-
-def propagation_in_medium(length, refractive_index):
-    matrix = [[1, length / refractive_index], [0, 1]]
-    return sp.Matrix(matrix)
 
 
 # %%
