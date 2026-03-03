@@ -18,6 +18,16 @@ Supported geometries (selected via the `GEOMETRY` variable inside the script):
 
 The outputs are intended to provide the geometric and mode parameters required as inputs for later squeezing/OPO quantum simulations.
 
+## Modeling details – Crystal ABCD matrices
+
+The crystal section is modeled using **decoupled ABCD elements**, rather than a single plane dielectric slab matrix. In particular, the round-trip construction explicitly separates:
+
+- Free-space propagation
+- Dielectric interface(s)
+- Propagation inside the crystal (using the refractive index)
+
+This modular approach makes the cavity construction transparent and allows easy extension (e.g., inclusion of thermal lensing or modified interface models).
+
 ---
 
 ## Examples
