@@ -16,8 +16,19 @@ crystal_length = sp.symbols("d_crystal", positive=True, real=True)
 n_crystal = sp.symbols("n_crystal", positive=True, real=True)
 RoC = sp.symbols("RoC", positive=True, real=True)
 theta_AOI = sp.symbols("theta_AOI", positive=True, real=True)
+RoC_lin = sp.symbols("RoC_lin", positive=True, real=True)
+L_cav = sp.symbols("L_cav", positive=True, real=True)
+RoC_hemi = sp.symbols("RoC_hemi", positive=True, real=True)
+L_air = sp.symbols("L_air", positive=True, real=True)
+
+
 
 # %%
+# Geometry selection
+
+# Choose: "bowtie", "linear", or "hemilithic" 
+GEOMETRY = "hemilithic"
+
 # Numeric parameters
 
 c_num = 299792458.0
@@ -28,7 +39,7 @@ f_n_crystal = 1.82
 f_RoC = 50e-3
 f_wavelength = 1550e-9
 
-# Bow-tie scan ranges
+# --- Bow-tie cavity parameters (used only if GEOMETRY == "bowtie") ---
 f_theta_AOI = 6 * np.pi / 180.0
 f_short_axis = np.arange(56e-3, 71e-3, 0.01e-3)
 f_long_axis = np.arange(70e-3, 120e-3, 0.5e-3)
@@ -36,11 +47,9 @@ f_long_axis = np.arange(70e-3, 120e-3, 0.5e-3)
 # Mesh 2D for bow-tie
 mesh_short_axis, mesh_long_axis = np.meshgrid(f_short_axis, f_long_axis)
 
-# %%
-# Geometry selection
-
-# Choose: "bowtie", "linear", or "hemilithic" 
-GEOMETRY = "hemilithic"
+def get_diagonal(long_axis, short_axis, theta_AOI):
+    diagonal = (long_axis + short_axis) / 2 * sp.cos(theta_AOI)
+    return diagonal
 
 # --- Linear cavity parameters (used only if GEOMETRY == "linear") ---
 # L_cav is the geometric mirror-to-mirror separation (round-trip geometric length is 2*L_cav)
@@ -51,12 +60,8 @@ f_L_cav = 100e-3
 f_L_air = 20e-3
 
 # %%
-def get_diagonal(long_axis, short_axis, theta_AOI):
-    diagonal = (long_axis + short_axis) / 2 * sp.cos(theta_AOI)
-    return diagonal
+# ABCD matrices for single optical elements
 
-
-# %%
 def mirror_ref_RoC_tangential(effective_RoC, theta_AOI):
     R_t = effective_RoC * sp.cos(theta_AOI)
     matrix = [[1, 0], [-2 / R_t, 1]]
@@ -90,6 +95,7 @@ def propagation_in_medium(length, refractive_index):
 
 
 # %%
+# ABCD matrices for different geometries
 def get_abcd_matrix_bowtie(long_axis, short_axis, diagonal, crystal_length, RoC, n_crystal, plane="sagittal"):
     if plane == "sagittal":
         mirror_fn = mirror_ref_RoC_sagittal
@@ -98,18 +104,18 @@ def get_abcd_matrix_bowtie(long_axis, short_axis, diagonal, crystal_length, RoC,
     else:
         raise ValueError("plane must be 'sagittal' or 'tangential'")
 
-    abcd_matrix_tmp = sp.eye(2)
+    M = sp.eye(2)
     # Start at crystal center: propagate half-crystal in medium, exit to air.
-    abcd_matrix_tmp = abcd_matrix_tmp @ free_propagation(crystal_length / 2)
-    abcd_matrix_tmp = abcd_matrix_tmp @ dielectric_interface(1, n_crystal )
-    abcd_matrix_tmp = abcd_matrix_tmp @ free_propagation( (short_axis - crystal_length) / 2)
-    abcd_matrix_tmp = abcd_matrix_tmp @ mirror_ref_RoC_sagittal(RoC, theta_AOI)
-    abcd_matrix_tmp = abcd_matrix_tmp @ free_propagation(long_axis+ 2 * diagonal)
-    abcd_matrix_tmp = abcd_matrix_tmp @ mirror_ref_RoC_sagittal(RoC, theta_AOI)
-    abcd_matrix_tmp = abcd_matrix_tmp @ free_propagation( (short_axis- crystal_length) / 2)
-    abcd_matrix_tmp = abcd_matrix_tmp @ dielectric_interface(n_crystal, 1 )
-    abcd_matrix_tmp = abcd_matrix_tmp @ free_propagation(crystal_length / 2)
-    return sp.simplify(abcd_matrix_tmp)
+    M = M @ free_propagation(crystal_length / 2)
+    M = M @ dielectric_interface(1, n_crystal )
+    M = M @ free_propagation( (short_axis - crystal_length) / 2)
+    M = M @ mirror_fn(RoC, theta_AOI)
+    M = M @ free_propagation(long_axis+ 2 * diagonal)
+    M = M @ mirror_fn(RoC, theta_AOI)
+    M = M @ free_propagation( (short_axis- crystal_length) / 2)
+    M = M @ dielectric_interface(n_crystal, 1 )
+    M = M @ free_propagation(crystal_length / 2)
+    return sp.simplify(M)
 
 
 def get_abcd_matrix_sagittal(long_axis, short_axis, diagonal, crystal_length, RoC, n_crystal):
@@ -119,8 +125,6 @@ def get_abcd_matrix_sagittal(long_axis, short_axis, diagonal, crystal_length, Ro
 def get_abcd_matrix_tangential(long_axis, short_axis, diagonal, crystal_length, RoC, n_crystal):
     return get_abcd_matrix_bowtie(long_axis, short_axis, diagonal, crystal_length, RoC, n_crystal, plane="tangential")
 
-
-# %%
 def get_abcd_matrix_linear(RoC1, RoC2, L_cav, crystal_length, n_crystal, theta_AOI=0.0):
     # Split the cavity into: air/medium halves around a centered crystal
     L_air_total = L_cav - crystal_length
@@ -135,25 +139,26 @@ def get_abcd_matrix_linear(RoC1, RoC2, L_cav, crystal_length, n_crystal, theta_A
 
     M = sp.eye(2)
 
+    # By default the AOI is zero, so sagittal and tangential are the same in linear cavity
     # Start just after reflection on Mirror1
     M = M @ free_propagation(L_air_half)
     M = M @ dielectric_interface(1, n_crystal)
-    M = M @ propagation_in_medium(crystal_length, n_crystal)
+    M = M @ free_propagation(crystal_length)
     M = M @ dielectric_interface(n_crystal, 1)
     M = M @ free_propagation(L_air_half)
 
     # Reflect on Mirror2 (theta=0 => sagittal=tangential)
-    M = M @ mirror_ref_RoC_tangential(RoC2, theta_AOI)
+    M = M @ mirror_ref_RoC_tangential(RoC2, 0)
 
     # Propagate back
     M = M @ free_propagation(L_air_half)
     M = M @ dielectric_interface(1, n_crystal)
-    M = M @ propagation_in_medium(crystal_length, n_crystal)
+    M = M @ free_propagation(crystal_length)
     M = M @ dielectric_interface(n_crystal, 1)
     M = M @ free_propagation(L_air_half)
 
     # Reflect on Mirror1 to complete the round trip
-    M = M @ mirror_ref_RoC_tangential(RoC1, theta_AOI)
+    M = M @ mirror_ref_RoC_tangential(RoC1, 0)
 
     return sp.simplify(M)
 
@@ -171,20 +176,23 @@ def get_abcd_matrix_hemilithic(RoC_mirror, L_air, crystal_length, n_crystal, the
     # Forward path: mirror -> air -> crystal
     M = M @ free_propagation(L_air)
     M = M @ dielectric_interface(1, n_crystal)
-    M = M @ propagation_in_medium(crystal_length, n_crystal)
+    M = M @ free_propagation(crystal_length)
 
     # HR coated back face is planar: reflection matrix is identity in ABCD.
 
     # Return path: crystal -> air -> mirror
-    M = M @ propagation_in_medium(crystal_length, n_crystal)
+    # By default the AOI is zero for the hemilithic case
+
+    M = M @ free_propagation(crystal_length)
     M = M @ dielectric_interface(n_crystal, 1)
     M = M @ free_propagation(L_air)
-    M = M @ mirror_ref_RoC_tangential(RoC_mirror, theta_AOI)
+    M = M @ mirror_ref_RoC_tangential(RoC_mirror, 0)
 
     return sp.simplify(M)
 
 
 # %%
+# Helper functions to extract ABCD parameters and compute stability and q-parameter
 def get_abcd_param(abcd_matrix):
     A = abcd_matrix[0, 0]
     B = abcd_matrix[0, 1]
@@ -198,8 +206,6 @@ def get_cavity_stability(abcd_matrix):
     m_factor = (A + D) / 2
     return m_factor
 
-
-# %%
 # m-factor helpers
 
 def get_m_factor(abcd_sp_function, long_axis, short_axis, theta_AOI, crystal_length, RoC, n_crystal):
@@ -229,8 +235,6 @@ if GEOMETRY == "bowtie":
 
 elif GEOMETRY == "linear":
     # Symmetric linear cavity: single RoC for both mirrors
-    RoC_lin, L_cav = sp.symbols("RoC_lin L_cav", positive=True, real=True)
-
     def _m_linear(RoC_, L_cav_, crystal_length_, n_crystal_):
         M = get_abcd_matrix_linear(RoC_, RoC_, L_cav_, crystal_length_, n_crystal_, theta_AOI=0.0)
         return get_cavity_stability(M)
@@ -244,8 +248,6 @@ elif GEOMETRY == "linear":
     estimate_m_factor_t = estimate_m_factor_s
 
 elif GEOMETRY == "hemilithic":
-    RoC_hemi, L_air = sp.symbols("RoC_hemi L_air", positive=True, real=True)
-
     def _m_hemilithic(RoC_, L_air_, crystal_length_, n_crystal_):
         M = get_abcd_matrix_hemilithic(RoC_, L_air_, crystal_length_, n_crystal_, theta_AOI=0.0)
         return get_cavity_stability(M)
@@ -279,15 +281,18 @@ if GEOMETRY == "bowtie":
     plt.grid(True)
 
 elif GEOMETRY == "linear":
-    # Linear cavity: 1D stability vs L_cav
-    L_scan = np.arange(30e-3, f_L_cav, 1e-3)
-    m_scan = estimate_m_factor_s(f_RoC, L_scan, f_crystal_length, f_n_crystal)
+    # Linear cavity: 2D stability map vs (L_cav, RoC)
+    L_cav_scan = np.arange(f_crystal_length + 0.5e-3, 120e-3, 0.5e-3)
+    RoC_scan = np.arange(10e-3, 150e-3, 0.5e-3)
+    mesh_L_cav, mesh_RoC = np.meshgrid(L_cav_scan, RoC_scan)
+    stable_map = np.abs(estimate_m_factor_s(mesh_RoC, mesh_L_cav, f_crystal_length, f_n_crystal)) < 1
+
     plt.figure()
-    plt.plot(L_scan * 1e3, np.abs(m_scan))
-    plt.axhline(1.0, color="red", linestyle="--", label="|m|=1 boundary")
-    plt.xlabel("L_cav [mm]")
-    plt.ylabel("|m|")
-    plt.title("Linear cavity stability (stable if |m|<1)")
+    plt.contourf(mesh_L_cav * 1e3, mesh_RoC * 1e3, stable_map)
+    plt.xlabel("Cavity length [mm]")
+    plt.ylabel("RoC [mm]")
+    plt.title("Linear cavity stability (|m|<1)")
+    plt.colorbar(label="stable")
     plt.grid(True)
 
 else:
@@ -341,8 +346,6 @@ if GEOMETRY == "bowtie":
     )
 
 elif GEOMETRY == "linear":
-    RoC_lin, L_cav = sp.symbols("RoC_lin L_cav", positive=True, real=True)
-
     def _q_linear(RoC_, L_cav_, crystal_length_, n_crystal_):
         M = get_abcd_matrix_linear(RoC_, RoC_, L_cav_, crystal_length_, n_crystal_, theta_AOI=0.0)
         return get_cavity_q(M)
@@ -356,8 +359,6 @@ elif GEOMETRY == "linear":
     estimate_q_tangential = estimate_q_sagittal
 
 else:
-    RoC_hemi, L_air = sp.symbols("RoC_hemi L_air", positive=True, real=True)
-
     def _q_hemilithic(RoC_, L_air_, crystal_length_, n_crystal_):
         M = get_abcd_matrix_hemilithic(RoC_, L_air_, crystal_length_, n_crystal_, theta_AOI=0.0)
         return get_cavity_q(M)
@@ -371,7 +372,6 @@ else:
     estimate_q_tangential = estimate_q_sagittal
 
 
-# %%
 def estimate_beam_waist(q_factor, wavelength, refractive_index=1):
     q_img = np.imag(q_factor)
     radius = np.sqrt(1.0 * wavelength * q_img / (refractive_index * np.pi))
@@ -379,7 +379,7 @@ def estimate_beam_waist(q_factor, wavelength, refractive_index=1):
 
 
 # %%
-# Plotting beam waist heatmap (bowtie only)
+# Plotting beam waist heatmap
 if GEOMETRY == "bowtie":
     f_q_sagittal_waist = estimate_q_sagittal(
         mesh_long_axis, mesh_short_axis, f_theta_AOI, f_crystal_length, f_RoC, f_n_crystal
@@ -395,7 +395,38 @@ if GEOMETRY == "bowtie":
     plt.ylabel("Long axis [mm]")
     plt.title("Bow-tie waist map")
     plt.colorbar(label="waist [um]")
-    # plt.savefig("waist_heatmap.png", dpi=300, bbox_inches="tight")
+elif GEOMETRY == "linear":
+    L_cav_scan = np.arange(f_crystal_length + 0.5e-3, 120e-3, 0.5e-3)
+    RoC_scan = np.arange(10e-3, 150e-3, 0.5e-3)
+    mesh_L_cav, mesh_RoC = np.meshgrid(L_cav_scan, RoC_scan)
+    f_q_sagittal_waist = estimate_q_sagittal(mesh_RoC, mesh_L_cav, f_crystal_length, f_n_crystal)
+
+    plt.figure()
+    plt.contourf(
+        mesh_L_cav * 1e3,
+        mesh_RoC * 1e3,
+        estimate_beam_waist(f_q_sagittal_waist, f_wavelength, refractive_index=f_n_crystal) * 1e6,
+    )
+    plt.xlabel("Cavity length [mm]")
+    plt.ylabel("RoC [mm]")
+    plt.title("Linear cavity waist map")
+    plt.colorbar(label="waist [um]")
+else:
+    L_air_scan = np.arange(0.5e-3, 120e-3, 0.5e-3)
+    RoC_scan = np.arange(10e-3, 150e-3, 0.5e-3)
+    mesh_L_air, mesh_RoC = np.meshgrid(L_air_scan, RoC_scan)
+    f_q_sagittal_waist = estimate_q_sagittal(mesh_RoC, mesh_L_air, f_crystal_length, f_n_crystal)
+
+    plt.figure()
+    plt.contourf(
+        mesh_L_air * 1e3,
+        mesh_RoC * 1e3,
+        estimate_beam_waist(f_q_sagittal_waist, f_wavelength, refractive_index=f_n_crystal) * 1e6,
+    )
+    plt.xlabel("Air gap [mm]")
+    plt.ylabel("RoC [mm]")
+    plt.title("Hemilithic cavity waist map")
+    plt.colorbar(label="waist [um]")
 
 
 # %%
@@ -431,15 +462,24 @@ if GEOMETRY == "bowtie":
 
 elif GEOMETRY == "linear":
     # Linear cavity example point (symmetric)
-    L_cav_val = f_L_cav
+    L_cav_val = 100e-3
 
-    qs = estimate_q_sagittal(f_RoC, L_cav_val, f_crystal_length, f_n_crystal)
+    # Evaluate from symbolic expressions for consistency with bow-tie flow
+    subs_linear = {
+        RoC_lin: f_RoC,
+        L_cav: L_cav_val,
+        crystal_length: f_crystal_length,
+        n_crystal: f_n_crystal,
+    }
+    m_sym = _m_linear(RoC_lin, L_cav, crystal_length, n_crystal)
+    q_sym = _q_linear(RoC_lin, L_cav, crystal_length, n_crystal)
+
+    m_val = float(sp.N(m_sym.subs(subs_linear)))
+    qs = complex(sp.N(q_sym.subs(subs_linear)))
     qt = qs
 
-    m_val = estimate_m_factor_s(f_RoC, L_cav_val, f_crystal_length, f_n_crystal)
-
     print(f"Linear cavity parameters: L_cav = {L_cav_val*1e3:.3f} mm, RoC = {f_RoC*1e3:.3f} mm")
-    print(f"m = {float(m_val):.6f} (stable if |m|<1)")
+    print(f"m = {m_val:.6f} (stable if |m|<1)")
     print(f"q parameter at the crystal center: {qs:.5f}")
 
     cavity_length = float(2 * L_cav_val)  # geometric round-trip length for linear cavity
@@ -447,14 +487,24 @@ elif GEOMETRY == "linear":
 
 else:
     # Hemilithic cavity example point
-    L_air_val = f_L_air
+    L_air_val = 20e-3
 
-    qs = estimate_q_sagittal(f_RoC, L_air_val, f_crystal_length, f_n_crystal)
+    # Evaluate from symbolic expressions for consistency with bow-tie flow
+    subs_hemi = {
+        RoC_hemi: f_RoC,
+        L_air: L_air_val,
+        crystal_length: f_crystal_length,
+        n_crystal: f_n_crystal,
+    }
+    m_sym = _m_hemilithic(RoC_hemi, L_air, crystal_length, n_crystal)
+    q_sym = _q_hemilithic(RoC_hemi, L_air, crystal_length, n_crystal)
+
+    m_val = float(sp.N(m_sym.subs(subs_hemi)))
+    qs = complex(sp.N(q_sym.subs(subs_hemi)))
     qt = qs
-    m_val = estimate_m_factor_s(f_RoC, L_air_val, f_crystal_length, f_n_crystal)
 
     print(f"Hemilithic cavity parameters: L_air = {L_air_val*1e3:.3f} mm, RoC = {f_RoC*1e3:.3f} mm")
-    print(f"m = {float(m_val):.6f} (stable if |m|<1)")
+    print(f"m = {m_val:.6f} (stable if |m|<1)")
     print(f"q parameter at crystal input face: {qs:.5f}")
 
     cavity_length = float(2 * (L_air_val + f_crystal_length))
