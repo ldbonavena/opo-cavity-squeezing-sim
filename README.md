@@ -30,6 +30,43 @@ This modular approach makes the cavity construction transparent and allows easy 
 
 ---
 
+## Installation and Usage
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/ldbonavena/opo-cavity-squeezing-sim.git
+cd opo-cavity-squeezing-sim
+```
+
+### 2. (Recommended) Create a virtual environment
+
+```bash
+python -m venv .venv
+source .venv/bin/activate  # macOS / Linux
+# .venv\Scripts\activate   # Windows
+```
+
+### 3. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Run the code
+
+Select the desired geometry inside `src/cavity_geometry.py` by setting:
+
+```python
+GEOMETRY = "bowtie"      # or "linear" or "hemilithic"
+```
+
+Then run:
+
+```bash
+python src/cavity_geometry.py
+```
+
 ## Examples
 For now, geometry is selected inside `src/cavity_geometry.py` via `GEOMETRY`.
 
