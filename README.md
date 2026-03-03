@@ -20,13 +20,14 @@ The outputs are intended to provide the geometric and mode parameters required a
 
 ## Modeling details – Crystal ABCD matrices
 
-The crystal section is modeled using **decoupled ABCD elements**, rather than a single plane dielectric slab matrix. In particular, the round-trip construction explicitly separates:
+The crystal section is modeled using **decoupled ABCD elements**, rather than a single “plane dielectric slab” matrix. The round-trip construction explicitly separates:
 
-- Free-space propagation
+- Propagation segments (using the standard propagation matrix)
 - Dielectric interface(s)
-- Propagation inside the crystal (using the refractive index)
 
-This modular approach makes the cavity construction transparent and allows easy extension (e.g., inclusion of thermal lensing or modified interface models).
+**Important convention:** in this ray-vector convention, propagation through free space and through a uniform medium of constant refractive index uses the **same** propagation matrix. The effect of the refractive index is accounted for via the **dielectric interface matrices** (which scale the ray angle), and when converting the q-parameter into a beam waist (the waist formula includes the refractive index).
+
+This modular approach makes the cavity construction transparent and allows easy extension (e.g., inclusion of curved interfaces or thermal lensing).
 
 ---
 
