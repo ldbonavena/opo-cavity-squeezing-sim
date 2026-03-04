@@ -37,7 +37,20 @@ f_crystal_length = 16e-3
 f_n_crystal = 1.82
 
 f_RoC = 50e-3
+
 f_wavelength = 1550e-9
+
+# --- Parameters for squeezing / OPO models ---
+# Power transmission of the (single) output coupler used to define the external coupling rate.
+# If your cavity has multiple couplers, replace this with the sum of all transmissions.
+f_T_ext = 0.10  # e.g. 10% power transmission (dimensionless)
+
+# Round-trip internal power loss (absorption + scattering + imperfect coatings), excluding the output coupler.
+f_L_rt = 0.01   # e.g. 1% round-trip loss (dimensionless)
+
+# Optional cavity detuning (set to 0.0 if not used)
+# Provide either in Hz or rad/s; Δ_rad_s is used for printing.
+f_detuning_Hz = 0.0
 
 # --- Bow-tie cavity parameters (used only if GEOMETRY == "bowtie") ---
 f_theta_AOI = 6 * np.pi / 180.0
@@ -519,9 +532,34 @@ print(f"Beam waist in crystal (from q): {w_um:.3f} um")
 L_optical = float(cavity_length + (f_n_crystal - 1.0) * optical_crystal_length)
 fsr = float(c_num / L_optical)
 
+
 print(f"Geometric cavity length: {cavity_length:.6f} m")
 print(f"Optical round-trip length: {L_optical:.6f} m")
 print(f"FSR: {fsr:.6f} Hz ({fsr/1e6:.6f} MHz)")
+
+# %%
+# Cavity decay rates and escape efficiency
+
+kappa_ext = (c_num / (2.0 * L_optical)) * f_T_ext
+kappa_loss = (c_num / (2.0 * L_optical)) * f_L_rt
+kappa = kappa_ext + kappa_loss
+
+# Escape efficiency (fraction of intracavity photons leaving through the output coupler)
+eta_escape = kappa_ext / kappa if kappa != 0 else np.nan
+
+# Also report the equivalent linewidth in Hz for convenience
+kappa_Hz = kappa / (2.0 * np.pi)
+
+# Detuning
+Delta_rad_s = 2.0 * np.pi * f_detuning_Hz
+
+print("\nCavity parameters for squeezing / OPO models:")
+print(f"w0 in crystal (TEM00): {w_um:.3f} um")
+print(f"kappa_ext  = {kappa_ext:.3e} rad/s   (kappa_ext/2π = {kappa_ext/(2*np.pi):.3e} Hz)")
+print(f"kappa_loss = {kappa_loss:.3e} rad/s   (kappa_loss/2π = {kappa_loss/(2*np.pi):.3e} Hz)")
+print(f"kappa      = {kappa:.3e} rad/s   (kappa/2π = {kappa_Hz:.3e} Hz)")
+print(f"Escape efficiency η_escape = {eta_escape:.4f}")
+print(f"Detuning Δ = {Delta_rad_s:.3e} rad/s   (Δ/2π = {f_detuning_Hz:.3e} Hz)")
 
 
 # %%
