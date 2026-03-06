@@ -12,11 +12,15 @@ Supported geometries (selected via the `GEOMETRY` variable inside the script):
 - Stability maps using the cavity m-factor (stable when |m| < 1)
 - Cavity eigenmode (q-parameter) from the round-trip ABCD matrix
 - Beam waist maps derived from the q-parameter
-- Single-point evaluation of m-factor, q-parameter, and beam waist in the crystal
+- Single-point evaluation of m-factor, q-parameter, beam waist in the crystal, and cavity parameters relevant for later OPO / squeezing models
 - Free Spectral Range (FSR) from the optical round-trip length (including crystal refractive index)
+- Cavity decay rates (`kappa_ext`, `kappa_loss`, `kappa`), escape efficiency, and optional detuning
 - Gouy phase per round trip (including sagittal/tangential behavior for bow-tie cavities)
+- Export of simulation inputs and results to a JSON file for downstream codes
 
 The outputs are intended to provide the geometric and mode parameters required as inputs for later squeezing/OPO quantum simulations.
+
+All generated outputs are saved inside the `results/` folder, organized by geometry (`results/bowtie/`, `results/linear/`, or `results/hemilithic/`). Each subfolder contains the simulation JSON output together with the generated stability and waist maps. This allows the next simulation layer to load cavity parameters directly without manually copying them.
 
 ## Modeling details – Crystal ABCD matrices
 
@@ -68,6 +72,12 @@ Then run:
 python src/cavity_geometry.py
 ```
 
+The script writes the main outputs to `results/<geometry>/`, including:
+
+- `cavity_simulation_output.json`
+- `stability_map.png`
+- `waist_map.png`
+
 ## Examples
 For now, geometry is selected inside `src/cavity_geometry.py` via `GEOMETRY`.
 
@@ -77,7 +87,8 @@ For now, geometry is selected inside `src/cavity_geometry.py` via `GEOMETRY`.
 
 Then run:
 
+```bash
 python src/cavity_geometry.py
+```
 
 ---
-
