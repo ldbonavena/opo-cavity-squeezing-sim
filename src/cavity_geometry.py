@@ -1,4 +1,7 @@
 # %%
+import json
+from pathlib import Path
+
 import numpy as np
 import matplotlib.pyplot as plt
 import sympy as sp
@@ -28,6 +31,8 @@ L_air = sp.symbols("L_air", positive=True, real=True)
 
 # Choose: "bowtie", "linear", or "hemilithic" 
 GEOMETRY = "hemilithic"
+RESULTS_DIR = Path(__file__).resolve().parents[1] / "results" / GEOMETRY
+RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Numeric parameters
 
@@ -274,9 +279,10 @@ else:
 
 # %%
 # Stability plots
+fig_stability = None
 
 if GEOMETRY == "bowtie":
-    plt.figure()
+    fig_stability = plt.figure()
     plt.contourf(
         mesh_short_axis * 1e3,
         mesh_long_axis * 1e3,
@@ -295,7 +301,7 @@ elif GEOMETRY == "linear":
     mesh_L_cav, mesh_RoC = np.meshgrid(L_cav_scan, RoC_scan)
     stable_map = np.abs(estimate_m_factor_s(mesh_RoC, mesh_L_cav, f_crystal_length, f_n_crystal)) < 1
 
-    plt.figure()
+    fig_stability = plt.figure()
     plt.contourf(mesh_L_cav * 1e3, mesh_RoC * 1e3, stable_map)
     plt.xlabel("Cavity length [mm]")
     plt.ylabel("RoC [mm]")
@@ -310,7 +316,7 @@ else:
     mesh_L_air, mesh_RoC = np.meshgrid(L_air_scan, RoC_scan)
     stable_map = np.abs(estimate_m_factor_s(mesh_RoC, mesh_L_air, f_crystal_length, f_n_crystal)) < 1
 
-    plt.figure()
+    fig_stability = plt.figure()
     plt.contourf(mesh_L_air * 1e3, mesh_RoC * 1e3, stable_map)
     plt.xlabel("Air gap [mm]")
     plt.ylabel("RoC [mm]")
@@ -388,12 +394,13 @@ def estimate_beam_waist(q_factor, wavelength, refractive_index=1):
 
 # %%
 # Plotting beam waist heatmap
+fig_waist = None
 if GEOMETRY == "bowtie":
     f_q_sagittal_waist = estimate_q_sagittal(
         mesh_long_axis, mesh_short_axis, f_theta_AOI, f_crystal_length, f_RoC, f_n_crystal
     )
 
-    plt.figure()
+    fig_waist = plt.figure()
     plt.contourf(
         mesh_short_axis * 1e3,
         mesh_long_axis * 1e3,
@@ -409,7 +416,7 @@ elif GEOMETRY == "linear":
     mesh_L_cav, mesh_RoC = np.meshgrid(L_cav_scan, RoC_scan)
     f_q_sagittal_waist = estimate_q_sagittal(mesh_RoC, mesh_L_cav, f_crystal_length, f_n_crystal)
 
-    plt.figure()
+    fig_waist = plt.figure()
     plt.contourf(
         mesh_L_cav * 1e3,
         mesh_RoC * 1e3,
@@ -425,7 +432,7 @@ else:
     mesh_L_air, mesh_RoC = np.meshgrid(L_air_scan, RoC_scan)
     f_q_sagittal_waist = estimate_q_sagittal(mesh_RoC, mesh_L_air, f_crystal_length, f_n_crystal)
 
-    plt.figure()
+    fig_waist = plt.figure()
     plt.contourf(
         mesh_L_air * 1e3,
         mesh_RoC * 1e3,
@@ -576,3 +583,82 @@ else:
 
 
 # %%
+# Export simulation output for downstream modules (e.g. crystal_thermo.py)
+if GEOMETRY == "bowtie":
+    geometry_inputs = {
+        "short_axis_m": float(short_axis_val),
+        "long_axis_m": float(long_axis_val),
+        "diagonal_m": float(diagonal_val),
+        "theta_AOI_rad": float(f_theta_AOI),
+        "theta_AOI_deg": float(np.degrees(f_theta_AOI)),
+    }
+    m_factor = {
+        "sagittal": float(m_x),
+        "tangential": float(m_y),
+    }
+else:
+    geometry_inputs = {
+        "L_cav_m": float(L_cav_val),
+    } if GEOMETRY == "linear" else {
+        "L_air_m": float(L_air_val),
+    }
+    m_factor = {
+        "sagittal": float(m_val),
+        "tangential": float(m_val),
+    }
+
+simulation_output = {
+    "geometry": GEOMETRY,
+    "constants": {"c_m_per_s": float(c_num)},
+    "inputs": {
+        "crystal_length_m": float(f_crystal_length),
+        "n_crystal": float(f_n_crystal),
+        "RoC_m": float(f_RoC),
+        "wavelength_m": float(f_wavelength),
+        "T_ext": float(f_T_ext),
+        "L_rt": float(f_L_rt),
+        "detuning_Hz": float(f_detuning_Hz),
+        "geometry_specific": geometry_inputs,
+    },
+    "results": {
+        "q_sagittal": {"real": float(np.real(qs)), "imag": float(np.imag(qs))},
+        "q_tangential": {"real": float(np.real(qt)), "imag": float(np.imag(qt))},
+        "m_factor": m_factor,
+        "beam_waist_crystal_um": float(w_um),
+        "cavity_length_m": float(cavity_length),
+        "optical_crystal_length_m": float(optical_crystal_length),
+        "optical_roundtrip_length_m": float(L_optical),
+        "fsr_Hz": float(fsr),
+        "kappa_ext_rad_s": float(kappa_ext),
+        "kappa_loss_rad_s": float(kappa_loss),
+        "kappa_total_rad_s": float(kappa),
+        "kappa_total_Hz": float(kappa_Hz),
+        "escape_efficiency": float(eta_escape),
+        "detuning_rad_s": float(Delta_rad_s),
+        "gouy_phase_sagittal_rad": float(psi_sagittal),
+        "gouy_phase_tangential_rad": float(psi_tangential),
+    },
+}
+
+stability_map_path = RESULTS_DIR / "stability_map.png"
+waist_map_path = RESULTS_DIR / "waist_map.png"
+if fig_stability is not None:
+    fig_stability.savefig(stability_map_path, dpi=300, bbox_inches="tight")
+if fig_waist is not None:
+    fig_waist.savefig(waist_map_path, dpi=300, bbox_inches="tight")
+
+simulation_output["outputs"] = {
+    "results_dir": str(RESULTS_DIR),
+    "stability_map_png": str(stability_map_path),
+    "waist_map_png": str(waist_map_path),
+}
+
+output_path = RESULTS_DIR / "cavity_simulation_output.json"
+with output_path.open("w", encoding="utf-8") as f:
+    json.dump(simulation_output, f, indent=2)
+
+print(f"Saved simulation output to: {output_path}")
+if fig_stability is not None:
+    print(f"Saved stability map to: {stability_map_path}")
+if fig_waist is not None:
+    print(f"Saved waist map to: {waist_map_path}")
