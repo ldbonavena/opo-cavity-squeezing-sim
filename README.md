@@ -1,94 +1,235 @@
-# OPO Cavity Geometry Toolkit
+# OPO Cavity Simulation Toolkit
 
-This repository provides a classical cavity geometry and eigenmode analysis tool based on ABCD matrices (paraxial Gaussian optics). The main script is `src/cavity_geometry.py`.
+This repository provides a modular simulation toolkit for designing and analyzing optical cavities used in Optical Parametric Oscillators (OPO) and squeezing experiments.  
+The code is based on paraxial Gaussian optics and ABCD matrix formalism and is organized as a small Python package to keep cavity geometry, crystal physics, and OPO models clearly separated.
 
-Supported geometries (selected via the `GEOMETRY` variable inside the script):
-- Bow-tie (ring) cavity
-- Linear standing-wave cavity (symmetric mirrors)
-- Hemilithic cavity (curved mirror + air gap + crystal with HR-coated back face)
-
-## What the code computes
-
-- Stability maps using the cavity m-factor (stable when |m| < 1)
-- Cavity eigenmode (q-parameter) from the round-trip ABCD matrix
-- Beam waist maps derived from the q-parameter
-- Single-point evaluation of m-factor, q-parameter, beam waist in the crystal, and cavity parameters relevant for later OPO / squeezing models
-- Free Spectral Range (FSR) from the optical round-trip length (including crystal refractive index)
-- Cavity decay rates (`kappa_ext`, `kappa_loss`, `kappa`), escape efficiency, and optional detuning
-- Gouy phase per round trip (including sagittal/tangential behavior for bow-tie cavities)
-- Export of simulation inputs and results to a JSON file for downstream codes
-
-The outputs are intended to provide the geometric and mode parameters required as inputs for later squeezing/OPO quantum simulations.
-
-All generated outputs are saved inside the `results/` folder, organized by geometry (`results/bowtie/`, `results/linear/`, or `results/hemilithic/`). Each subfolder contains the simulation JSON output together with the generated stability and waist maps. This allows the next simulation layer to load cavity parameters directly without manually copying them.
-
-## Modeling details – Crystal ABCD matrices
-
-The crystal section is modeled using **decoupled ABCD elements**, rather than a single “plane dielectric slab” matrix. The round-trip construction explicitly separates:
-
-- Propagation segments (using the standard propagation matrix)
-- Dielectric interface(s)
-
-**Important convention:** in this ray-vector convention, propagation through free space and through a uniform medium of constant refractive index uses the **same** propagation matrix. The effect of the refractive index is accounted for via the **dielectric interface matrices** (which scale the ray angle), and when converting the q-parameter into a beam waist (the waist formula includes the refractive index).
-
-This modular approach makes the cavity construction transparent and allows easy extension (e.g., inclusion of curved interfaces or thermal lensing).
+The current implementation focuses on **cavity geometry and eigenmode analysis**, producing the optical parameters required for later nonlinear and quantum simulations.
 
 ---
 
-## Installation and Usage
+# Project Structure
 
-### 1. Clone the repository
+```
+src/
+    cavity/            # Cavity geometry and optical mode analysis
+        cavity_geometry.py
+        cavity_abcd.py
+        cavity_analysis.py
+        cavity_plotter.py
+        cavity_workflow.py
+        optics_abcd.py
+
+    crystal/           # Crystal material and thermo‑optic models
+        crystal_thermo.py
+
+    common/            # Shared utilities (constants, helpers)
+
+    io/                # Input/output helpers
+
+    opo/               # Future nonlinear and squeezing simulations
+```
+
+The project is structured so that each module has a clear responsibility:
+
+- **cavity/**: geometry definition, ABCD matrices, stability analysis, beam modes
+- **crystal/**: thermo‑optic properties and phase‑matching calculations
+- **opo/**: nonlinear OPO dynamics and squeezing simulations (future work)
+- **io/**: data loading/saving utilities
+- **common/**: reusable helpers and constants
+
+---
+
+# What the cavity simulation computes
+
+The cavity module performs a complete **Gaussian eigenmode analysis** of several cavity geometries.
+
+Supported geometries:
+
+- Bow‑tie (ring) cavity
+- Linear standing‑wave cavity
+- Hemilithic cavity
+- Triangle cavity
+
+For a given geometry the code computes:
+
+- Stability maps using the cavity **m‑factor** (stable when |m| < 1)
+- Cavity eigenmodes via the **round‑trip ABCD matrix**
+- Beam waist maps across parameter space
+- Single‑point cavity evaluation including:
+
+  - m‑factor(s)
+  - q‑parameter(s)
+  - beam waist inside the crystal
+  - geometric round‑trip length
+  - optical round‑trip length
+
+- Derived cavity quantities:
+
+  - Free Spectral Range (FSR)
+  - decay rates: `kappa_ext`, `kappa_loss`, `kappa_total`
+  - escape efficiency
+  - detuning
+  - Gouy phases
+
+These quantities are the required inputs for later simulations of:
+
+- nonlinear gain
+- OPO threshold
+- squeezing spectra
+
+---
+
+# Output files
+
+All simulation outputs are written to the `results/` directory.
+
+```
+results/
+    <geometry>/
+        cavity_simulation_output.json
+        stability_map.png
+        waist_map.png
+```
+
+Each run produces:
+
+**cavity_simulation_output.json**
+
+Contains all relevant simulation inputs and computed parameters, including:
+
+- cavity geometry parameters
+- q‑parameters
+- waist sizes
+- FSR
+- decay rates
+- escape efficiency
+- Gouy phases
+
+This JSON file is intended to be loaded by the next simulation layer (crystal physics or OPO model).
+
+**stability_map.png**
+
+Visualization of cavity stability across the scanned parameter space.
+
+**waist_map.png**
+
+Beam waist map corresponding to the same parameter scan.
+
+---
+
+# Modeling approach
+
+The cavity model uses the **ABCD matrix formalism** for paraxial Gaussian beams.
+
+The crystal section is modeled using **decoupled ABCD elements** rather than a single dielectric slab matrix:
+
+- free‑space propagation
+- dielectric interfaces
+- crystal propagation
+
+In this convention, propagation in free space and in a uniform refractive index medium use the **same propagation matrix**.  
+The refractive index enters through the dielectric interface matrices and through the waist calculation.
+
+This modular construction makes it straightforward to extend the simulation with:
+
+- thermal lensing
+- curved interfaces
+- nonlinear effects
+
+---
+
+# Installation
+
+Clone the repository:
 
 ```bash
 git clone https://github.com/ldbonavena/opo-cavity-squeezing-sim.git
 cd opo-cavity-squeezing-sim
 ```
 
-### 2. (Recommended) Create a virtual environment
+Create a virtual environment (recommended):
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # macOS / Linux
-# .venv\Scripts\activate   # Windows
+source .venv/bin/activate
 ```
 
-### 3. Install dependencies
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Run the code
+---
 
-Select the desired geometry inside `src/cavity_geometry.py` by setting:
+# Running the cavity simulation
+
+The main entry point is:
+
+```
+src/cavity/cavity_geometry.py
+```
+
+Select the geometry by editing:
 
 ```python
-GEOMETRY = "bowtie"      # or "linear" or "hemilithic"
+GEOMETRY = "bowtie"
 ```
 
-Then run:
+Available options:
+
+```
+bowtie
+linear
+triangle
+hemilithic
+```
+
+Run the simulation:
 
 ```bash
-python src/cavity_geometry.py
+python src/cavity/cavity_geometry.py
 ```
 
-The script writes the main outputs to `results/<geometry>/`, including:
+The script will:
 
-- `cavity_simulation_output.json`
-- `stability_map.png`
-- `waist_map.png`
-
-## Examples
-For now, geometry is selected inside `src/cavity_geometry.py` via `GEOMETRY`.
-
-- Bow-tie: set `GEOMETRY = "bowtie"`
-- Linear: set `GEOMETRY = "linear"`
-- Hemilithic: set `GEOMETRY = "hemilithic"`
-
-Then run:
-
-```bash
-python src/cavity_geometry.py
-```
+1. Print a short description of the selected cavity geometry
+2. Display an ASCII sketch of the cavity
+3. Generate stability and waist maps
+4. Evaluate a representative cavity configuration
+5. Export all parameters to `results/<geometry>/cavity_simulation_output.json`
 
 ---
+
+# Examples
+
+Example scripts are available in the `examples/` folder:
+
+```
+examples/
+    run_bowtie.py
+    run_linear.py
+    run_hemilithic.py
+```
+
+These scripts run predefined cavity configurations for quick testing.
+
+---
+
+# Future extensions
+
+Planned modules include:
+
+- crystal thermo‑optic modeling
+- phase‑matching calculations
+- nonlinear coupling estimation
+- OPO threshold simulations
+- squeezing spectrum computation
+
+The modular structure of the repository is designed to allow these layers to build directly on the cavity results exported by the current code.
+
+---
+
+# License
+
+See the `LICENSE` file for details.
