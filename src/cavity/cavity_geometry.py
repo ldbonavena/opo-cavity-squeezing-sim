@@ -6,12 +6,13 @@ from pathlib import Path
 
 import numpy as np
 
-from cavity_analysis import beam_waist_from_q
 from cavity_plotter import CavityPlotter
 from cavity_workflow import (
     build_geometry_estimators,
     build_geometry_inputs_for_export,
+    compute_derived_cavity_quantities,
     evaluate_single_point,
+    print_derived_cavity_quantities,
     print_geometry_info,
     print_single_point_summary,
 )
@@ -21,7 +22,7 @@ from cavity_workflow import (
 
 # Choose: "bowtie", "linear", "triangle", or "hemilithic"
 GEOMETRY = "bowtie"
-RESULT_DIR = Path(__file__).resolve().parents[1] / "results" / GEOMETRY
+RESULT_DIR = Path(__file__).resolve().parents[2] / "results" / GEOMETRY
 RESULT_DIR.mkdir(parents=True, exist_ok=True)
 
 # %%
@@ -136,37 +137,21 @@ optical_crystal_length = single_point["optical_crystal_length"]
 # %%
 # Derived cavity figures
 
-w_um = beam_waist_from_q(qs, f_wavelength, refractive_index=f_n_crystal) * 1e6
-print(f"Beam waist in crystal (from q): {w_um:.3f} um")
-
-L_optical = float(cavity_length + (f_n_crystal - 1.0) * optical_crystal_length)
-fsr = float(c_num / L_optical)
-
-print(f"Geometric cavity length: {cavity_length:.6f} m")
-print(f"Optical round-trip length: {L_optical:.6f} m")
-print(f"FSR: {fsr:.6f} Hz ({fsr/1e6:.6f} MHz)")
-
-kappa_ext = (c_num / (2.0 * L_optical)) * f_T_ext
-kappa_loss = (c_num / (2.0 * L_optical)) * f_L_rt
-kappa = kappa_ext + kappa_loss
-eta_escape = kappa_ext / kappa if kappa != 0 else np.nan
-kappa_Hz = kappa / (2.0 * np.pi)
-Delta_rad_s = 2.0 * np.pi * f_detuning_Hz
-
-print("\nCavity parameters for squeezing / OPO models:")
-print(f"w0 in crystal (TEM00): {w_um:.3f} um")
-print(f"kappa_ext  = {kappa_ext:.3e} rad/s   (kappa_ext/2π = {kappa_ext/(2*np.pi):.3e} Hz)")
-print(f"kappa_loss = {kappa_loss:.3e} rad/s   (kappa_loss/2π = {kappa_loss/(2*np.pi):.3e} Hz)")
-print(f"kappa      = {kappa:.3e} rad/s   (kappa/2π = {kappa_Hz:.3e} Hz)")
-print(f"Escape efficiency η_escape = {eta_escape:.4f}")
-print(f"Detuning Δ = {Delta_rad_s:.3e} rad/s   (Δ/2π = {f_detuning_Hz:.3e} Hz)")
-
-if GEOMETRY in ("bowtie", "triangle"):
-    psi_sagittal = np.arccos(m_factor_dict["sagittal"])
-    psi_tangential = np.arccos(m_factor_dict["tangential"])
-else:
-    psi_sagittal = np.arccos(m_factor_dict["sagittal"])
-    psi_tangential = psi_sagittal
+derived = compute_derived_cavity_quantities(
+    GEOMETRY,
+    qs,
+    qt,
+    m_factor_dict,
+    cavity_length,
+    optical_crystal_length,
+    f_wavelength,
+    f_n_crystal,
+    c_num,
+    f_T_ext,
+    f_L_rt,
+    f_detuning_Hz,
+)
+print_derived_cavity_quantities(derived)
 
 # %%
 # Export simulation output
@@ -190,19 +175,19 @@ simulation_output = {
         "q_sagittal": {"real": float(np.real(qs)), "imag": float(np.imag(qs))},
         "q_tangential": {"real": float(np.real(qt)), "imag": float(np.imag(qt))},
         "m_factor": m_factor_export,
-        "beam_waist_crystal_um": float(w_um),
-        "cavity_length_m": float(cavity_length),
-        "optical_crystal_length_m": float(optical_crystal_length),
-        "optical_roundtrip_length_m": float(L_optical),
-        "fsr_Hz": float(fsr),
-        "kappa_ext_rad_s": float(kappa_ext),
-        "kappa_loss_rad_s": float(kappa_loss),
-        "kappa_total_rad_s": float(kappa),
-        "kappa_total_Hz": float(kappa_Hz),
-        "escape_efficiency": float(eta_escape),
-        "detuning_rad_s": float(Delta_rad_s),
-        "gouy_phase_sagittal_rad": float(psi_sagittal),
-        "gouy_phase_tangential_rad": float(psi_tangential),
+        "beam_waist_crystal_um": float(derived["beam_waist_crystal_um"]),
+        "cavity_length_m": float(derived["cavity_length_m"]),
+        "optical_crystal_length_m": float(derived["optical_crystal_length_m"]),
+        "optical_roundtrip_length_m": float(derived["optical_roundtrip_length_m"]),
+        "fsr_Hz": float(derived["fsr_Hz"]),
+        "kappa_ext_rad_s": float(derived["kappa_ext_rad_s"]),
+        "kappa_loss_rad_s": float(derived["kappa_loss_rad_s"]),
+        "kappa_total_rad_s": float(derived["kappa_total_rad_s"]),
+        "kappa_total_Hz": float(derived["kappa_total_Hz"]),
+        "escape_efficiency": float(derived["escape_efficiency"]),
+        "detuning_rad_s": float(derived["detuning_rad_s"]),
+        "gouy_phase_sagittal_rad": float(derived["gouy_phase_sagittal_rad"]),
+        "gouy_phase_tangential_rad": float(derived["gouy_phase_tangential_rad"]),
     },
 }
 

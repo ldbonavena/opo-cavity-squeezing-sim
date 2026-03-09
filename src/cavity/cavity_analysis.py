@@ -27,6 +27,43 @@ def beam_waist_from_q(q_parameter, wavelength, refractive_index=1):
     return np.sqrt(wavelength * q_im / (refractive_index * np.pi))
 
 
+def optical_roundtrip_length(cavity_length_m, optical_crystal_length_m, n_crystal):
+    """Return optical round-trip cavity length in meters."""
+    return float(cavity_length_m + (n_crystal - 1.0) * optical_crystal_length_m)
+
+
+def fsr_from_roundtrip_length(L_optical_m, c_m_per_s):
+    """Return free spectral range in Hz from optical round-trip length."""
+    return float(c_m_per_s / L_optical_m)
+
+
+def compute_decay_rates(L_optical_m, c_m_per_s, T_ext, L_rt):
+    """Compute cavity decay rates and escape efficiency."""
+    kappa_ext = (c_m_per_s / (2.0 * L_optical_m)) * T_ext
+    kappa_loss = (c_m_per_s / (2.0 * L_optical_m)) * L_rt
+    kappa_total = kappa_ext + kappa_loss
+    return {
+        "kappa_ext_rad_s": float(kappa_ext),
+        "kappa_loss_rad_s": float(kappa_loss),
+        "kappa_total_rad_s": float(kappa_total),
+        "kappa_total_Hz": float(kappa_total / (2.0 * np.pi)),
+        "escape_efficiency": float(kappa_ext / kappa_total) if kappa_total != 0 else np.nan,
+    }
+
+
+def gouy_phases_from_m_factor(geometry, m_factor_dict):
+    """Return sagittal/tangential Gouy phases in radians from m-factors."""
+    psi_sagittal = np.arccos(m_factor_dict["sagittal"])
+    if geometry in ("bowtie", "triangle"):
+        psi_tangential = np.arccos(m_factor_dict["tangential"])
+    else:
+        psi_tangential = psi_sagittal
+    return {
+        "gouy_phase_sagittal_rad": float(psi_sagittal),
+        "gouy_phase_tangential_rad": float(psi_tangential),
+    }
+
+
 def bowtie_m_factor(long_axis, short_axis, incidence_angle, crystal_length, radius_of_curvature, refractive_index, plane="sagittal"):
     """Return bow-tie cavity m-factor for a selected plane."""
     matrix = CavityAbcdBuilder.bowtie_roundtrip(
@@ -253,6 +290,10 @@ __all__ = [
     "cavity_stability",
     "cavity_q_parameter",
     "beam_waist_from_q",
+    "optical_roundtrip_length",
+    "fsr_from_roundtrip_length",
+    "compute_decay_rates",
+    "gouy_phases_from_m_factor",
     "bowtie_m_factor",
     "bowtie_q_parameter",
     "linear_m_factor",

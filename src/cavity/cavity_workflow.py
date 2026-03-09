@@ -6,7 +6,15 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from cavity_analysis import make_m_factor_estimator, make_q_estimator
+from cavity_analysis import (
+    beam_waist_from_q,
+    compute_decay_rates,
+    fsr_from_roundtrip_length,
+    gouy_phases_from_m_factor,
+    make_m_factor_estimator,
+    make_q_estimator,
+    optical_roundtrip_length,
+)
 from cavity_plotter import print_geometry_ascii
 
 
@@ -336,6 +344,100 @@ def build_geometry_inputs_for_export(geometry: str, result: dict) -> tuple[dict,
     return result["geometry_values"], result["m_factor"]
 
 
+def compute_derived_cavity_quantities(
+    geometry: str,
+    qs: complex,
+    qt: complex,
+    m_factor_dict: dict,
+    cavity_length: float,
+    optical_crystal_length: float,
+    wavelength: float,
+    n_crystal: float,
+    c_m_per_s: float,
+    T_ext: float,
+    L_rt: float,
+    detuning_Hz: float,
+) -> dict:
+    """Compute derived cavity figures for a single cavity operating point."""
+    _ = qt
+
+    beam_waist_crystal_um = (
+        beam_waist_from_q(
+            qs,
+            wavelength,
+            refractive_index=n_crystal,
+        )
+        * 1e6
+    )
+    L_optical = optical_roundtrip_length(
+        cavity_length,
+        optical_crystal_length,
+        n_crystal,
+    )
+    fsr = fsr_from_roundtrip_length(L_optical, c_m_per_s)
+    decay = compute_decay_rates(
+        L_optical,
+        c_m_per_s,
+        T_ext,
+        L_rt,
+    )
+    gouy = gouy_phases_from_m_factor(geometry, m_factor_dict)
+
+    return {
+        "beam_waist_crystal_um": float(beam_waist_crystal_um),
+        "cavity_length_m": float(cavity_length),
+        "optical_crystal_length_m": float(optical_crystal_length),
+        "optical_roundtrip_length_m": float(L_optical),
+        "fsr_Hz": float(fsr),
+        "kappa_ext_rad_s": decay["kappa_ext_rad_s"],
+        "kappa_loss_rad_s": decay["kappa_loss_rad_s"],
+        "kappa_total_rad_s": decay["kappa_total_rad_s"],
+        "kappa_total_Hz": decay["kappa_total_Hz"],
+        "escape_efficiency": decay["escape_efficiency"],
+        "detuning_rad_s": float(2.0 * np.pi * detuning_Hz),
+        "gouy_phase_sagittal_rad": gouy["gouy_phase_sagittal_rad"],
+        "gouy_phase_tangential_rad": gouy["gouy_phase_tangential_rad"],
+    }
+
+
+def print_derived_cavity_quantities(results: dict) -> None:
+    """Print cavity-derived quantities using an aligned spec-style table."""
+    def _print_specs(title: str, rows: list[tuple[str, str]]) -> None:
+        print(f"\n{title}")
+        print("-" * len(title))
+        for label, value in rows:
+            print(f"{label:<32}: {value}")
+
+    detuning_hz = results["detuning_rad_s"] / (2.0 * np.pi)
+    kappa_ext_hz = results["kappa_ext_rad_s"] / (2.0 * np.pi)
+    kappa_loss_hz = results["kappa_loss_rad_s"] / (2.0 * np.pi)
+    _print_specs(
+        "Derived cavity figures",
+        [
+            ("Beam waist in crystal", f"{results['beam_waist_crystal_um']:.3f} um"),
+            ("Geometric cavity length", f"{results['cavity_length_m']:.6f} m"),
+            ("Optical round-trip length", f"{results['optical_roundtrip_length_m']:.6f} m"),
+            ("FSR", f"{results['fsr_Hz']:.6f} Hz ({results['fsr_Hz']/1e6:.6f} MHz)"),
+            (
+                "kappa_ext",
+                f"{results['kappa_ext_rad_s']:.3e} rad/s (kappa_ext/2pi = {kappa_ext_hz:.3e} Hz)",
+            ),
+            (
+                "kappa_loss",
+                f"{results['kappa_loss_rad_s']:.3e} rad/s (kappa_loss/2pi = {kappa_loss_hz:.3e} Hz)",
+            ),
+            (
+                "kappa_total",
+                f"{results['kappa_total_rad_s']:.3e} rad/s (kappa/2pi = {results['kappa_total_Hz']:.3e} Hz)",
+            ),
+            ("Escape efficiency", f"{results['escape_efficiency']:.4f}"),
+            ("Detuning", f"{results['detuning_rad_s']:.3e} rad/s (Delta/2pi = {detuning_hz:.3e} Hz)"),
+            ("Gouy phase sagittal", f"{results['gouy_phase_sagittal_rad']:.6f} rad"),
+            ("Gouy phase tangential", f"{results['gouy_phase_tangential_rad']:.6f} rad"),
+        ],
+    )
+
+
 __all__ = [
     "GeometryEstimators",
     "print_geometry_info",
@@ -343,4 +445,6 @@ __all__ = [
     "evaluate_single_point",
     "print_single_point_summary",
     "build_geometry_inputs_for_export",
+    "compute_derived_cavity_quantities",
+    "print_derived_cavity_quantities",
 ]
