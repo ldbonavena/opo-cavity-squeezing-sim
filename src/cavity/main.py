@@ -41,7 +41,7 @@ from cavity_workflow import (
 # Geometry selection
 
 # Choose: "bowtie", "linear", "triangle", or "hemilithic"
-GEOMETRY = "hemilithic"
+GEOMETRY = "bowtie"
 
 # %%
 

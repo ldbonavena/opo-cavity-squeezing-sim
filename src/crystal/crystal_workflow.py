@@ -10,12 +10,12 @@ from typing import Any, Callable
 import numpy as np
 
 try:
-    from common.results_paths import ensure_geometry_results_subdirs, get_geometry_results_subdir
+    from common.results_paths import ensure_geometry_results_subdirs, get_cavity_results_dir, get_crystal_results_dir
 except ImportError:
     import sys
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from common.results_paths import ensure_geometry_results_subdirs, get_geometry_results_subdir
+    from common.results_paths import ensure_geometry_results_subdirs, get_cavity_results_dir, get_crystal_results_dir
 
 from .crystal_mode_matching import (
     ModeMatchingResult,
@@ -61,7 +61,7 @@ def load_cavity_context_for_crystal(
 ) -> CrystalContext:
     """Load cavity JSON output and build the crystal workflow context."""
     if cavity_output_path is None:
-        cavity_output_path = get_geometry_results_subdir(geometry, "cavity") / "cavity_simulation_output.json"
+        cavity_output_path = get_cavity_results_dir(geometry) / "cavity_simulation_output.json"
     cavity_data = _load_cavity_output_data(cavity_output_path)
 
     inputs = cavity_data.get("inputs", {})
@@ -205,7 +205,7 @@ def save_crystal_outputs(
 ) -> dict[str, str]:
     """Save crystal JSON and plots under ``results/<geometry>/crystal/``."""
     ensure_geometry_results_subdirs(geometry, results_root=results_root)
-    result_dir = get_geometry_results_subdir(geometry, "crystal", results_root=results_root)
+    result_dir = get_crystal_results_dir(geometry, results_root=results_root)
 
     json_path = result_dir / "crystal_simulation_output.json"
     phase_path = result_dir / "phase_matching_scan.png"

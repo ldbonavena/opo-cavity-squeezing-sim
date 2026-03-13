@@ -32,6 +32,9 @@ opo-cavity-squeezing-sim/
             crystal_plotter.py
 
         common/     # Shared utilities (constants, helpers)
+            __init__.py
+            constants.py
+            results_paths.py
         opo/        # Future nonlinear and squeezing simulations
 
     LICENSE
@@ -44,7 +47,7 @@ The project is structured so that each module has a clear responsibility:
 - **cavity/**: geometry definition, ABCD matrices, stability analysis, beam modes
 - **crystal/**: crystal material models, phase‑matching calculations, mode matching, and focused‑beam nonlinear interaction (Boyd–Kleinman theory)
 - **opo/**: nonlinear OPO dynamics and squeezing simulations (future work)
-- **common/**: reusable helpers and constants
+- **common/**: reusable constants and shared helpers such as results-path management
 
 ---
 
@@ -91,7 +94,7 @@ These quantities are the required inputs for later simulations of:
 # Output files
 
 All simulation outputs are written to the local `results/` directory.  
-This folder is intended for locally generated simulation data and is not meant to be version-controlled.
+The directory structure is created automatically when simulations are executed.
 
 ```
 results/
@@ -130,6 +133,14 @@ Visualization of cavity stability across the scanned parameter space.
 **waist_map.png**
 
 Beam waist map corresponding to the same parameter scan.
+
+**crystal_simulation_output.json**
+
+Contains the crystal-layer inputs derived from the cavity simulation together with:
+
+- phase-matching scan results
+- mode-matching summary values
+- cavity output reference used to build the crystal context
 
 ---
 
@@ -188,26 +199,33 @@ Run the simulation layers directly from their main entry points:
 Typical usage:
 
 ```bash
-python src/cavity/main.py
-python src/crystal/main.py
+python -m src.cavity.main
+python -m src.crystal.main
 ```
+
+Both scripts are designed to be run interactively in VS Code using `# %%` cells or as plain Python entry points.
 
 The cavity script generates geometry-dependent cavity results under `results/<geometry>/cavity/`.  
 The crystal script loads the cavity output from `results/<geometry>/cavity/cavity_simulation_output.json` and writes crystal results under `results/<geometry>/crystal/`.
+
+Shared utilities used by both layers live in:
+
+- `src/common/constants.py`
+- `src/common/results_paths.py`
 
 ---
 
 # Future extensions
 
-Planned modules include:
+Planned developments include:
 
-- crystal thermo‑optic modeling
-- phase‑matching calculations
+- full thermo‑optic crystal models
 - nonlinear coupling estimation
 - OPO threshold simulations
 - squeezing spectrum computation
+- quantum noise and detection modeling
 
-The modular structure of the repository is designed to allow these layers to build directly on the cavity results exported by the current code.
+The modular structure of the repository is designed so that each layer (cavity → crystal → OPO) builds directly on the results exported by the previous stage.
 
 ---
 

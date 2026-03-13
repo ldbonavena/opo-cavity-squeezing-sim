@@ -10,12 +10,12 @@ from typing import Any
 import numpy as np
 
 try:
-    from common.results_paths import ensure_geometry_results_subdirs, get_geometry_results_subdir
+    from common.results_paths import ensure_geometry_results_subdirs, get_cavity_results_dir
 except ImportError:
     import sys
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from common.results_paths import ensure_geometry_results_subdirs, get_geometry_results_subdir
+    from common.results_paths import ensure_geometry_results_subdirs, get_cavity_results_dir
 
 from cavity_analysis import (
     beam_waist_from_q,
@@ -636,7 +636,7 @@ def save_cavity_outputs(
 ) -> dict[str, str]:
     """Save cavity JSON and plots under ``results/<geometry>/cavity/``."""
     ensure_geometry_results_subdirs(geometry, results_root=results_root)
-    result_dir = get_geometry_results_subdir(geometry, "cavity", results_root=results_root)
+    result_dir = get_cavity_results_dir(geometry, results_root=results_root)
 
     json_path = result_dir / "cavity_simulation_output.json"
     stability_path = result_dir / "stability_map.png"
