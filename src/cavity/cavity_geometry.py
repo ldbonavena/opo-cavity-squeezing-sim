@@ -21,7 +21,7 @@ from cavity_workflow import (
 # Geometry selection
 
 # Choose: "bowtie", "linear", "triangle", or "hemilithic"
-GEOMETRY = "hemilithic"
+GEOMETRY = "bowtie"
 RESULT_DIR = Path(__file__).resolve().parents[2] / "results" / GEOMETRY
 RESULT_DIR.mkdir(parents=True, exist_ok=True)
 

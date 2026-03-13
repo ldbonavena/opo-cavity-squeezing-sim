@@ -10,27 +10,33 @@ The current implementation focuses on **cavity geometry and eigenmode analysis**
 # Project Structure
 
 ```
-src/
-    cavity/            # Cavity geometry and optical mode analysis
-        cavity_geometry.py
-        cavity_abcd.py
-        cavity_analysis.py
-        cavity_plotter.py
-        cavity_workflow.py
-        optics_abcd.py
+opo-cavity-squeezing-sim/
+    docs/
+    results/        # local simulation outputs; not intended for version control
+    src/
+        cavity/     # Cavity geometry and optical mode analysis
+            main.py
+            cavity_workflow.py
+            cavity_abcd.py
+            cavity_analysis.py
+            cavity_plotter.py
+            optics_abcd.py
 
-    crystal/           # Crystal physics and nonlinear interaction modeling
-        crystal_workflow.py
-        crystal_materials.py
-        crystal_phase_matching.py
-        crystal_mode_matching.py
-        crystal_boyd_kleinman.py
-        crystal_plotter.py
-        crystal_thermo.py
+        crystal/    # Crystal physics and nonlinear interaction modeling
+            main.py
+            crystal_workflow.py
+            crystal_materials.py
+            crystal_phase_matching.py
+            crystal_mode_matching.py
+            crystal_boyd_kleinman.py
+            crystal_plotter.py
 
-    common/            # Shared utilities (constants, helpers)
+        common/     # Shared utilities (constants, helpers)
+        opo/        # Future nonlinear and squeezing simulations
 
-    opo/               # Future nonlinear and squeezing simulations
+    LICENSE
+    README.md
+    requirements.txt
 ```
 
 The project is structured so that each module has a clear responsibility:
@@ -85,14 +91,20 @@ These quantities are the required inputs for later simulations of:
 # Output files
 
 All simulation outputs are written to the local `results/` directory.  
-This folder is intended for locally generated simulation data and is not required to be version‑controlled.
+This folder is intended for locally generated simulation data and is not meant to be version-controlled.
 
 ```
 results/
     <geometry>/
-        cavity_simulation_output.json
-        stability_map.png
-        waist_map.png
+        cavity/
+            cavity_simulation_output.json
+            stability_map.png
+            waist_map.png
+        crystal/
+            crystal_simulation_output.json
+            phase_matching_scan.png
+            mode_matching_summary.png
+        opo/
 ```
 
 Each run produces:
@@ -166,57 +178,22 @@ pip install -r requirements.txt
 
 ---
 
-# Running the cavity simulation
+# Running simulations
 
-The main entry point is:
+Run the simulation layers directly from their main entry points:
 
-```
-src/cavity/cavity_geometry.py
-```
+- `src/cavity/main.py`
+- `src/crystal/main.py`
 
-Select the geometry by editing:
-
-```python
-GEOMETRY = "bowtie"
-```
-
-Available options:
-
-```
-bowtie
-linear
-triangle
-hemilithic
-```
-
-Run the simulation:
+Typical usage:
 
 ```bash
-python src/cavity/cavity_geometry.py
+python src/cavity/main.py
+python src/crystal/main.py
 ```
 
-The script will:
-
-1. Print a short description of the selected cavity geometry
-2. Display an ASCII sketch of the cavity
-3. Generate stability and waist maps
-4. Evaluate a representative cavity configuration
-5. Export all parameters to `results/<geometry>/cavity_simulation_output.json`
-
----
-
-# Examples
-
-Example scripts are available in the `examples/` folder:
-
-```
-examples/
-    run_bowtie.py
-    run_linear.py
-    run_hemilithic.py
-```
-
-These scripts run predefined cavity configurations for quick testing.
+The cavity script generates geometry-dependent cavity results under `results/<geometry>/cavity/`.  
+The crystal script loads the cavity output from `results/<geometry>/cavity/cavity_simulation_output.json` and writes crystal results under `results/<geometry>/crystal/`.
 
 ---
 

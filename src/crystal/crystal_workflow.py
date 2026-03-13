@@ -9,6 +9,14 @@ from typing import Any, Callable
 
 import numpy as np
 
+try:
+    from common.results_paths import ensure_geometry_results_subdirs, get_geometry_results_subdir
+except ImportError:
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from common.results_paths import ensure_geometry_results_subdirs, get_geometry_results_subdir
+
 from .crystal_mode_matching import (
     ModeMatchingResult,
     build_mode_matching_context_from_cavity_output,
@@ -39,19 +47,22 @@ class CrystalSimulationResult:
     mode_matching: ModeMatchingResult
 
 
+def _load_cavity_output_data(path: str | Path) -> dict[str, Any]:
+    cavity_output_path = Path(path)
+    if not cavity_output_path.exists():
+        raise FileNotFoundError(f"Cavity simulation output not found: {cavity_output_path}")
+    with cavity_output_path.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
 def load_cavity_context_for_crystal(
     geometry: str,
     cavity_output_path: str | Path | None = None,
 ) -> CrystalContext:
-    """Load cavity JSON output and build a crystal context."""
+    """Load cavity JSON output and build the crystal workflow context."""
     if cavity_output_path is None:
-        cavity_output_path = Path(__file__).resolve().parents[2] / "results" / geometry / "cavity_simulation_output.json"
-    path = Path(cavity_output_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Cavity simulation output not found: {path}")
-
-    with path.open("r", encoding="utf-8") as f:
-        cavity_data = json.load(f)
+        cavity_output_path = get_geometry_results_subdir(geometry, "cavity") / "cavity_simulation_output.json"
+    cavity_data = _load_cavity_output_data(cavity_output_path)
 
     inputs = cavity_data.get("inputs", {})
     results = cavity_data.get("results", {})
@@ -62,13 +73,17 @@ def load_cavity_context_for_crystal(
 
     return CrystalContext(
         geometry=cavity_data.get("geometry", geometry),
-        cavity_output_path=str(path),
+        cavity_output_path=str(Path(cavity_output_path)),
         crystal_length_m=float(inputs["crystal_length_m"]),
         wavelength_m=float(inputs["wavelength_m"]),
         n_crystal=float(inputs["n_crystal"]),
         beam_waist_crystal_m=float(waist_um) * 1e-6,
         cavity_data=cavity_data,
     )
+
+
+def _phase_matching_scan_to_output(scan: dict[str, Any]) -> dict[str, Any]:
+    return {key: (value.tolist() if isinstance(value, np.ndarray) else value) for key, value in scan.items()}
 
 
 def compute_crystal_phase_matching(
@@ -87,7 +102,7 @@ def compute_crystal_phase_matching(
     alpha_perK: float = 0.0,
     qpm_order_m: int = 1,
 ) -> dict[str, Any]:
-    """Compute phase-matching temperature scan from crystal context."""
+    """Compute the phase-matching temperature scan from the cavity-derived context."""
     scan = scan_phase_matching_vs_temperature(
         T_min_K,
         T_max_K,
@@ -104,18 +119,18 @@ def compute_crystal_phase_matching(
         alpha_perK=alpha_perK,
         qpm_order_m=qpm_order_m,
     )
-    return {k: (v.tolist() if isinstance(v, np.ndarray) else v) for k, v in scan.items()}
+    return _phase_matching_scan_to_output(scan)
 
 
 def compute_crystal_mode_matching(
     context: CrystalContext,
     delta_k_rad_per_m: float = 0.0,
 ) -> ModeMatchingResult:
-    """Compute focusing/mode-matching summary from cavity-derived beam parameters."""
-    cavity_mm_context = build_mode_matching_context_from_cavity_output(context.cavity_data)
-    waist = cavity_mm_context.waist_crystal_m or context.beam_waist_crystal_m
+    """Compute focusing and mode-matching quantities from the cavity-derived beam parameters."""
+    cavity_mode_matching_context = build_mode_matching_context_from_cavity_output(context.cavity_data)
+    waist_crystal_m = cavity_mode_matching_context.waist_crystal_m or context.beam_waist_crystal_m
     return estimate_mode_matching_quantities(
-        waist_crystal_m=float(waist),
+        waist_crystal_m=float(waist_crystal_m),
         crystal_length_m=context.crystal_length_m,
         wavelength_m=context.wavelength_m,
         n_crystal=context.n_crystal,
@@ -123,22 +138,17 @@ def compute_crystal_mode_matching(
     )
 
 
-def build_crystal_simulation_output(result: CrystalSimulationResult) -> dict[str, Any]:
-    """Build JSON-serializable crystal simulation output."""
-    return {
-        "geometry": result.context.geometry,
-        "inputs": {
-            "cavity_output_path": result.context.cavity_output_path,
-            "crystal_length_m": result.context.crystal_length_m,
-            "wavelength_m": result.context.wavelength_m,
-            "n_crystal": result.context.n_crystal,
-            "beam_waist_crystal_m": result.context.beam_waist_crystal_m,
-        },
-        "results": {
-            "phase_matching": result.phase_matching,
-            "mode_matching": asdict(result.mode_matching),
-        },
-    }
+def build_crystal_simulation_result(
+    context: CrystalContext,
+    phase_matching: dict[str, Any],
+    mode_matching: ModeMatchingResult,
+) -> CrystalSimulationResult:
+    """Build the structured crystal workflow result."""
+    return CrystalSimulationResult(
+        context=context,
+        phase_matching=phase_matching,
+        mode_matching=mode_matching,
+    )
 
 
 def print_crystal_summary(result: CrystalSimulationResult) -> None:
@@ -160,6 +170,32 @@ def print_crystal_summary(result: CrystalSimulationResult) -> None:
     print(f"Effective nonlinear overlap: {mode.effective_nonlinear_overlap:.6f}")
 
 
+def _build_crystal_inputs_payload(context: CrystalContext) -> dict[str, Any]:
+    return {
+        "cavity_output_path": context.cavity_output_path,
+        "crystal_length_m": context.crystal_length_m,
+        "wavelength_m": context.wavelength_m,
+        "n_crystal": context.n_crystal,
+        "beam_waist_crystal_m": context.beam_waist_crystal_m,
+    }
+
+
+def _build_crystal_results_payload(result: CrystalSimulationResult) -> dict[str, Any]:
+    return {
+        "phase_matching": result.phase_matching,
+        "mode_matching": asdict(result.mode_matching),
+    }
+
+
+def build_crystal_simulation_output(result: CrystalSimulationResult) -> dict[str, Any]:
+    """Build JSON-serializable crystal simulation output."""
+    return {
+        "geometry": result.context.geometry,
+        "inputs": _build_crystal_inputs_payload(result.context),
+        "results": _build_crystal_results_payload(result),
+    }
+
+
 def save_crystal_outputs(
     geometry: str,
     output: dict[str, Any],
@@ -167,11 +203,9 @@ def save_crystal_outputs(
     fig_mode,
     results_root: str | Path | None = None,
 ) -> dict[str, str]:
-    """Save crystal JSON and plots under ``results/crystal/<geometry>/``."""
-    if results_root is None:
-        results_root = Path(__file__).resolve().parents[2] / "results" / "crystal"
-    result_dir = Path(results_root) / geometry
-    result_dir.mkdir(parents=True, exist_ok=True)
+    """Save crystal JSON and plots under ``results/<geometry>/crystal/``."""
+    ensure_geometry_results_subdirs(geometry, results_root=results_root)
+    result_dir = get_geometry_results_subdir(geometry, "crystal", results_root=results_root)
 
     json_path = result_dir / "crystal_simulation_output.json"
     phase_path = result_dir / "phase_matching_scan.png"
@@ -199,6 +233,7 @@ __all__ = [
     "load_cavity_context_for_crystal",
     "compute_crystal_phase_matching",
     "compute_crystal_mode_matching",
+    "build_crystal_simulation_result",
     "build_crystal_simulation_output",
     "print_crystal_summary",
     "save_crystal_outputs",
