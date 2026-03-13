@@ -19,12 +19,16 @@ src/
         cavity_workflow.py
         optics_abcd.py
 
-    crystal/           # Crystal material and thermo‑optic models
+    crystal/           # Crystal physics and nonlinear interaction modeling
+        crystal_workflow.py
+        crystal_materials.py
+        crystal_phase_matching.py
+        crystal_mode_matching.py
+        crystal_boyd_kleinman.py
+        crystal_plotter.py
         crystal_thermo.py
 
     common/            # Shared utilities (constants, helpers)
-
-    io/                # Input/output helpers
 
     opo/               # Future nonlinear and squeezing simulations
 ```
@@ -32,9 +36,8 @@ src/
 The project is structured so that each module has a clear responsibility:
 
 - **cavity/**: geometry definition, ABCD matrices, stability analysis, beam modes
-- **crystal/**: thermo‑optic properties and phase‑matching calculations
+- **crystal/**: crystal material models, phase‑matching calculations, mode matching, and focused‑beam nonlinear interaction (Boyd–Kleinman theory)
 - **opo/**: nonlinear OPO dynamics and squeezing simulations (future work)
-- **io/**: data loading/saving utilities
 - **common/**: reusable helpers and constants
 
 ---
@@ -81,7 +84,8 @@ These quantities are the required inputs for later simulations of:
 
 # Output files
 
-All simulation outputs are written to the `results/` directory.
+All simulation outputs are written to the local `results/` directory.  
+This folder is intended for locally generated simulation data and is not required to be version‑controlled.
 
 ```
 results/
