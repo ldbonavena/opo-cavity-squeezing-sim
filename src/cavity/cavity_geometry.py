@@ -21,11 +21,12 @@ from cavity_workflow import (
 # Geometry selection
 
 # Choose: "bowtie", "linear", "triangle", or "hemilithic"
-GEOMETRY = "bowtie"
+GEOMETRY = "hemilithic"
 RESULT_DIR = Path(__file__).resolve().parents[2] / "results" / GEOMETRY
 RESULT_DIR.mkdir(parents=True, exist_ok=True)
 
 # %%
+
 # Numeric parameters
 
 c_num = 299792458.0
