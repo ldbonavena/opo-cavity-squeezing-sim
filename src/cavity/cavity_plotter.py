@@ -14,7 +14,7 @@ def print_geometry_ascii(geometry: str) -> None:
         print(
             "      T_in       T_out\n"
             "   -----(--[###]--)----->\n"
-            "        <- - - - -> d"
+            "         <- - - -> d"
         )
     elif geometry == "triangle":
         print(
@@ -29,7 +29,7 @@ def print_geometry_ascii(geometry: str) -> None:
         )
     elif geometry == "bowtie":
         print(
-            "         <- - - - -> d1\n"
+            "          <- - - -> d1\n"
             "    M3,R /--[###]--\\ M4,R\n"
             "          \\       /\n"
             "            \\   /\n"
@@ -43,8 +43,8 @@ def print_geometry_ascii(geometry: str) -> None:
     elif geometry == "hemilithic":
         print(
             "   T_out                HR crystal face\n"
-            "   -----(---- air ----[###]|----->\n"
-            "          <--- L_air --->"
+            "   -----(---- air ----[###)----->\n"
+            "         <-- L_air -->"
         )
     else:
         raise ValueError("geometry must be 'bowtie', 'linear', 'triangle', or 'hemilithic'")
