@@ -1,4 +1,4 @@
-# OPO Cavity Simulation Toolkit
+# QPIT-SQZsim
 
 This repository provides a modular simulation toolkit for designing and analyzing optical cavities used in Optical Parametric Oscillators (OPO) and squeezing experiments.  
 The code is based on paraxial Gaussian optics and ABCD matrix formalism and is organized as a small Python package to keep cavity geometry, crystal physics, and OPO models clearly separated.
@@ -10,12 +10,12 @@ The current implementation focuses on **cavity geometry and eigenmode analysis**
 # Project Structure
 
 ```
-opo-cavity-squeezing-sim/
+QPIT-SQZsim/
     docs/
     results/        # local simulation outputs; not intended for version control
     src/
         cavity/     # Cavity geometry and optical mode analysis
-            main.py
+            cavity_main.py
             cavity_workflow.py
             cavity_abcd.py
             cavity_analysis.py
@@ -23,7 +23,7 @@ opo-cavity-squeezing-sim/
             optics_abcd.py
 
         crystal/    # Crystal physics and nonlinear interaction modeling
-            main.py
+            crystal_main.py
             crystal_workflow.py
             crystal_materials.py
             crystal_phase_matching.py
@@ -170,8 +170,8 @@ This modular construction makes it straightforward to extend the simulation with
 Clone the repository:
 
 ```bash
-git clone https://github.com/ldbonavena/opo-cavity-squeezing-sim.git
-cd opo-cavity-squeezing-sim
+git clone <repository-url> QPIT-SQZsim
+cd QPIT-SQZsim
 ```
 
 Create a virtual environment (recommended):
@@ -193,14 +193,14 @@ pip install -r requirements.txt
 
 Run the simulation layers directly from their main entry points:
 
-- `src/cavity/main.py`
-- `src/crystal/main.py`
+- `src/cavity/cavity_main.py`
+- `src/crystal/crystal_main.py`
 
 Typical usage:
 
 ```bash
-python -m src.cavity.main
-python -m src.crystal.main
+python -m src.cavity.cavity_main
+python -m src.crystal.crystal_main
 ```
 
 Both scripts are designed to be run interactively in VS Code using `# %%` cells or as plain Python entry points.
@@ -226,6 +226,16 @@ Planned developments include:
 - quantum noise and detection modeling
 
 The modular structure of the repository is designed so that each layer (cavity → crystal → OPO) builds directly on the results exported by the previous stage.
+
+---
+
+## Documentation
+
+Detailed documentation is available in the `docs/` folder:
+
+- architecture overview
+- cavity theory and outputs
+- crystal modeling
 
 ---
 

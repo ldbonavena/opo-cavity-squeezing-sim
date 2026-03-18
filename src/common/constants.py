@@ -22,3 +22,4 @@ HBAR_J_S = 1.054571817e-34  # Reduced Planck constant [J s]
 # Fundamental constants
 K_B_J_PER_K = 1.380649e-23  # Boltzmann constant [J/K]
 E_CHARGE_C = 1.602176634e-19  # Elementary charge [C]
+

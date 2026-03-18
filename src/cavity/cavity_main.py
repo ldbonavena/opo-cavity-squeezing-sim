@@ -2,14 +2,8 @@
 """
 Main entry point for cavity simulation.
 
-This script runs the full cavity geometry and optical mode simulation workflow:
-- geometry selection
-- stability analysis
-- cavity eigenmode computation
-- derived cavity quantities
-- export of simulation results
-
-The script is designed to be executed interactively in VS Code using `# %%` cells.
+This script orchestrates the cavity simulation workflow:
+geometry -> stability -> mode -> derived quantities -> export
 """
 
 # -------------------------------------------------------------------
@@ -21,7 +15,16 @@ The script is designed to be executed interactively in VS Code using `# %%` cell
 # results for the selected geometry.
 # -------------------------------------------------------------------
 
+import sys
+from pathlib import Path
+
 import numpy as np
+
+_HERE = Path(__file__).resolve().parent
+_SRC_ROOT = _HERE.parents[0]
+for _path in (str(_HERE), str(_SRC_ROOT)):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
 
 from cavity_plotter import CavityPlotter
 from cavity_workflow import (

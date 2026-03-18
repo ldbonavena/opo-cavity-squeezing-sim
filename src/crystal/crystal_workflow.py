@@ -206,10 +206,17 @@ def save_crystal_outputs(
     """Save crystal JSON and plots under ``results/<geometry>/crystal/``."""
     ensure_geometry_results_subdirs(geometry, results_root=results_root)
     result_dir = get_crystal_results_dir(geometry, results_root=results_root)
+    project_root = Path(__file__).resolve().parents[2]
 
     json_path = result_dir / "crystal_simulation_output.json"
     phase_path = result_dir / "phase_matching_scan.png"
     mode_path = result_dir / "mode_matching_summary.png"
+
+    def _repo_relative(path: Path) -> str:
+        try:
+            return str(path.resolve().relative_to(project_root))
+        except ValueError:
+            return str(path)
 
     with json_path.open("w", encoding="utf-8") as f:
         json.dump(output, f, indent=2)
@@ -220,10 +227,10 @@ def save_crystal_outputs(
         fig_mode.savefig(mode_path, dpi=300, bbox_inches="tight")
 
     return {
-        "result_dir": str(result_dir),
-        "crystal_output_json": str(json_path),
-        "phase_matching_scan_png": str(phase_path),
-        "mode_matching_summary_png": str(mode_path),
+        "result_dir": _repo_relative(result_dir),
+        "crystal_output_json": _repo_relative(json_path),
+        "phase_matching_scan_png": _repo_relative(phase_path),
+        "mode_matching_summary_png": _repo_relative(mode_path),
     }
 
 

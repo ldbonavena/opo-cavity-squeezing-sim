@@ -2,14 +2,8 @@
 """
 Main entry point for crystal simulation.
 
-This script runs the crystal physics workflow using the cavity simulation results:
-- loading cavity context
-- phase matching calculations
-- mode matching
-- focused-beam nonlinear efficiency (Boyd-Kleinman)
-- export of crystal simulation results
-
-The script is designed to be executed interactively in VS Code using `# %%` cells.
+This script orchestrates the crystal simulation workflow:
+cavity context -> phase matching -> mode matching -> nonlinear efficiency -> export
 """
 
 from __future__ import annotations

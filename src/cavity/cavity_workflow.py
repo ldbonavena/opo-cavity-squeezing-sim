@@ -637,16 +637,23 @@ def save_cavity_outputs(
     """Save cavity JSON and plots under ``results/<geometry>/cavity/``."""
     ensure_geometry_results_subdirs(geometry, results_root=results_root)
     result_dir = get_cavity_results_dir(geometry, results_root=results_root)
+    project_root = Path(__file__).resolve().parents[2]
 
     json_path = result_dir / "cavity_simulation_output.json"
     stability_path = result_dir / "stability_map.png"
     waist_path = result_dir / "waist_map.png"
 
+    def _repo_relative(path: Path) -> str:
+        try:
+            return str(path.resolve().relative_to(project_root))
+        except ValueError:
+            return str(path)
+
     outputs_info = {
-        "result_dir": str(result_dir),
-        "cavity_output_json": str(json_path),
-        "stability_map_png": str(stability_path),
-        "waist_map_png": str(waist_path),
+        "result_dir": _repo_relative(result_dir),
+        "cavity_output_json": _repo_relative(json_path),
+        "stability_map_png": _repo_relative(stability_path),
+        "waist_map_png": _repo_relative(waist_path),
     }
     output["outputs"] = outputs_info
 
