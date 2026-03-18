@@ -54,35 +54,22 @@ The project is structured so that each module has a clear responsibility:
 
 # What the cavity simulation computes
 
-The cavity module performs a complete **Gaussian eigenmode analysis** of several cavity geometries.
-
-Supported geometries:
-
-- Bow‑tie (ring) cavity
-- Linear standing‑wave cavity
-- Hemilithic cavity
-- Triangle cavity
-
 For a given geometry the code computes:
 
-- Stability maps using the cavity **m‑factor** (stable when |m| < 1)
-- Cavity eigenmodes via the **round‑trip ABCD matrix**
-- Beam waist maps across parameter space
-- Single‑point cavity evaluation including:
+- Stability maps (|m| < 1)
+- Eigenmodes via the round-trip ABCD matrix
+- Beam waist maps
+- Single-point evaluation:
+  - q-parameters
+  - waist in the crystal
+  - round-trip lengths (geometric and optical)
 
-  - m‑factor(s)
-  - q‑parameter(s)
-  - beam waist inside the crystal
-  - geometric round‑trip length
-  - optical round‑trip length
+Derived quantities:
 
-- Derived cavity quantities:
-
-  - Free Spectral Range (FSR)
-  - decay rates: `kappa_ext`, `kappa_loss`, `kappa_total`
-  - escape efficiency
-  - detuning
-  - Gouy phases
+- Free Spectral Range (FSR)
+- decay rates: `kappa_ext`, `kappa_loss`, `kappa_total`
+- escape efficiency and detuning
+- Gouy phases
 
 These quantities are the required inputs for later simulations of:
 
@@ -125,7 +112,7 @@ Contains all relevant simulation inputs and computed parameters, including:
 - escape efficiency
 - Gouy phases
 
-This JSON file is intended to be loaded by the next simulation layer (crystal physics or OPO model).
+This JSON file is used by the next simulation layer (crystal or OPO).
 
 **stability_map.png**
 
@@ -149,7 +136,7 @@ Contains the crystal-layer inputs derived from the cavity simulation together wi
 
 The cavity model uses the **ABCD matrix formalism** for paraxial Gaussian beams.
 
-The crystal section is modeled using **decoupled ABCD elements** rather than a single dielectric slab matrix:
+In the crystal section, propagation is modeled using decoupled ABCD elements instead of a single dielectric slab matrix:
 
 - free‑space propagation
 - dielectric interfaces
@@ -166,31 +153,21 @@ This modular construction makes it straightforward to extend the simulation with
 
 ---
 
-# Installation
-
-Clone the repository:
+## Installation
 
 ```bash
 git clone <repository-url> QPIT-SQZsim
 cd QPIT-SQZsim
-```
-
-Create a virtual environment (recommended):
-
-```bash
 python -m venv .venv
 source .venv/bin/activate
-```
-
-Install dependencies:
-
-```bash
 pip install -r requirements.txt
 ```
 
 ---
 
 # Running simulations
+
+Simulations are executed per module (no global pipeline yet).
 
 Run the simulation layers directly from their main entry points:
 
@@ -213,6 +190,15 @@ Shared utilities used by both layers live in:
 
 - `src/common/constants.py`
 - `src/common/results_paths.py`
+
+---
+
+# Design principles
+
+- Modular separation of physics layers (cavity → crystal → OPO)
+- Explicit data flow via JSON outputs
+- Interactive workflow using `# %%` cells
+- Minimal dependencies and transparent numerical implementation
 
 ---
 
