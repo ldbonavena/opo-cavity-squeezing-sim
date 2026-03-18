@@ -1,9 +1,10 @@
 # QPIT-SQZsim
 
-This repository provides a modular simulation toolkit for designing and analyzing optical cavities used in Optical Parametric Oscillators (OPO) and squeezing experiments.  
-The code is based on paraxial Gaussian optics and ABCD matrix formalism and is organized as a small Python package to keep cavity geometry, crystal physics, and OPO models clearly separated.
+A modular simulation framework for optical parametric oscillators (OPOs) and squeezed light generation, combining cavity geometry, crystal physics, and nonlinear interaction modeling.
 
-The current implementation focuses on **cavity geometry and eigenmode analysis**, producing the optical parameters required for later nonlinear and quantum simulations.
+The project is structured in layers:
+
+cavity → crystal → OPO → squeezing
 
 ---
 
