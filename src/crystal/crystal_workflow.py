@@ -124,16 +124,18 @@ def compute_crystal_phase_matching(
 
 def compute_crystal_mode_matching(
     context: CrystalContext,
+    n_crystal: float | None = None,
     delta_k_rad_per_m: float = 0.0,
 ) -> ModeMatchingResult:
     """Compute focusing and mode-matching quantities from the cavity-derived beam parameters."""
     cavity_mode_matching_context = build_mode_matching_context_from_cavity_output(context.cavity_data)
     waist_crystal_m = cavity_mode_matching_context.waist_crystal_m or context.beam_waist_crystal_m
+    medium_index = context.n_crystal if n_crystal is None else float(n_crystal)
     return estimate_mode_matching_quantities(
         waist_crystal_m=float(waist_crystal_m),
         crystal_length_m=context.crystal_length_m,
         wavelength_m=context.wavelength_m,
-        n_crystal=context.n_crystal,
+        n_crystal=medium_index,
         delta_k_rad_per_m=delta_k_rad_per_m,
     )
 

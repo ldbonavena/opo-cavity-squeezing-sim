@@ -174,6 +174,7 @@ def _evaluate_bowtie_operating_point(context: CavityContext, point_parameters: d
     short_axis_val = point_parameters["bowtie_short_axis_m"]
     long_axis_val = point_parameters["bowtie_long_axis_m"]
     theta = point_parameters.get("bowtie_theta_AOI_rad", parameters["f_theta_AOI"])
+    radius_of_curvature_val = point_parameters.get("single_point_RoC_m", parameters["f_RoC"])
     diagonal_val = float((long_axis_val + short_axis_val) / 2 * np.cos(theta))
 
     m_x = float(
@@ -182,7 +183,7 @@ def _evaluate_bowtie_operating_point(context: CavityContext, point_parameters: d
             short_axis_val,
             theta,
             parameters["f_crystal_length"],
-            parameters["f_RoC"],
+            radius_of_curvature_val,
             parameters["f_n_crystal"],
         )
     )
@@ -192,7 +193,7 @@ def _evaluate_bowtie_operating_point(context: CavityContext, point_parameters: d
             short_axis_val,
             theta,
             parameters["f_crystal_length"],
-            parameters["f_RoC"],
+            radius_of_curvature_val,
             parameters["f_n_crystal"],
         )
     )
@@ -202,7 +203,7 @@ def _evaluate_bowtie_operating_point(context: CavityContext, point_parameters: d
             short_axis_val,
             theta,
             parameters["f_crystal_length"],
-            parameters["f_RoC"],
+            radius_of_curvature_val,
             parameters["f_n_crystal"],
         )
     )
@@ -212,7 +213,7 @@ def _evaluate_bowtie_operating_point(context: CavityContext, point_parameters: d
             short_axis_val,
             theta,
             parameters["f_crystal_length"],
-            parameters["f_RoC"],
+            radius_of_curvature_val,
             parameters["f_n_crystal"],
         )
     )
@@ -227,6 +228,7 @@ def _evaluate_bowtie_operating_point(context: CavityContext, point_parameters: d
             "diagonal_m": diagonal_val,
             "theta_AOI_rad": float(theta),
             "theta_AOI_deg": float(np.degrees(theta)),
+            "RoC_m": float(radius_of_curvature_val),
         },
         cavity_length=float(long_axis_val + short_axis_val + 2 * diagonal_val),
         optical_crystal_length=float(parameters["f_crystal_length"]),
@@ -238,9 +240,10 @@ def _evaluate_linear_operating_point(context: CavityContext, point_parameters: d
     estimators = context.estimators
 
     cavity_length_val = point_parameters.get("linear_cavity_length_m", parameters["f_L_cav"])
+    radius_of_curvature_val = point_parameters.get("single_point_RoC_m", parameters["f_RoC"])
     m_val = float(
         estimators.estimate_m_factor_s(
-            parameters["f_RoC"],
+            radius_of_curvature_val,
             cavity_length_val,
             parameters["f_crystal_length"],
             parameters["f_n_crystal"],
@@ -248,7 +251,7 @@ def _evaluate_linear_operating_point(context: CavityContext, point_parameters: d
     )
     qs = complex(
         estimators.estimate_q_sagittal(
-            parameters["f_RoC"],
+            radius_of_curvature_val,
             cavity_length_val,
             parameters["f_crystal_length"],
             parameters["f_n_crystal"],
@@ -259,7 +262,7 @@ def _evaluate_linear_operating_point(context: CavityContext, point_parameters: d
         qs=qs,
         qt=qs,
         m_factor={"sagittal": m_val, "tangential": m_val},
-        geometry_values={"L_cav_m": float(cavity_length_val)},
+        geometry_values={"L_cav_m": float(cavity_length_val), "RoC_m": float(radius_of_curvature_val)},
         cavity_length=float(2 * cavity_length_val),
         optical_crystal_length=float(parameters["f_crystal_length"]),
     )
@@ -271,6 +274,7 @@ def _evaluate_triangle_operating_point(context: CavityContext, point_parameters:
 
     width_val = point_parameters["triangle_width_m"]
     height_val = point_parameters["triangle_height_m"]
+    radius_of_curvature_val = point_parameters.get("single_point_RoC_m", parameters["f_RoC"])
     diagonal_val = float(np.sqrt((width_val / 2) ** 2 + height_val**2))
     theta_half_val = float(np.arcsin(height_val / diagonal_val) / 2)
 
@@ -279,7 +283,7 @@ def _evaluate_triangle_operating_point(context: CavityContext, point_parameters:
             width_val,
             height_val,
             parameters["f_crystal_length"],
-            parameters["f_RoC"],
+            radius_of_curvature_val,
             parameters["f_n_crystal"],
         )
     )
@@ -288,7 +292,7 @@ def _evaluate_triangle_operating_point(context: CavityContext, point_parameters:
             width_val,
             height_val,
             parameters["f_crystal_length"],
-            parameters["f_RoC"],
+            radius_of_curvature_val,
             parameters["f_n_crystal"],
         )
     )
@@ -297,7 +301,7 @@ def _evaluate_triangle_operating_point(context: CavityContext, point_parameters:
             width_val,
             height_val,
             parameters["f_crystal_length"],
-            parameters["f_RoC"],
+            radius_of_curvature_val,
             parameters["f_n_crystal"],
         )
     )
@@ -306,7 +310,7 @@ def _evaluate_triangle_operating_point(context: CavityContext, point_parameters:
             width_val,
             height_val,
             parameters["f_crystal_length"],
-            parameters["f_RoC"],
+            radius_of_curvature_val,
             parameters["f_n_crystal"],
         )
     )
@@ -321,6 +325,7 @@ def _evaluate_triangle_operating_point(context: CavityContext, point_parameters:
             "triangle_diagonal_m": diagonal_val,
             "mirror_aoi_half_angle_rad": theta_half_val,
             "mirror_aoi_half_angle_deg": float(np.degrees(theta_half_val)),
+            "RoC_m": float(radius_of_curvature_val),
         },
         cavity_length=float(width_val + 2 * diagonal_val),
         optical_crystal_length=float(parameters["f_crystal_length"]),
@@ -335,9 +340,10 @@ def _evaluate_hemilithic_operating_point(
     estimators = context.estimators
 
     air_gap_val = point_parameters.get("hemilithic_air_gap_m", parameters["f_L_air"])
+    radius_of_curvature_val = point_parameters.get("single_point_RoC_m", parameters["f_RoC"])
     m_val = float(
         estimators.estimate_m_factor_s(
-            parameters["f_RoC"],
+            radius_of_curvature_val,
             air_gap_val,
             parameters["f_crystal_length"],
             parameters["f_n_crystal"],
@@ -345,7 +351,7 @@ def _evaluate_hemilithic_operating_point(
     )
     qs = complex(
         estimators.estimate_q_sagittal(
-            parameters["f_RoC"],
+            radius_of_curvature_val,
             air_gap_val,
             parameters["f_crystal_length"],
             parameters["f_n_crystal"],
@@ -356,7 +362,7 @@ def _evaluate_hemilithic_operating_point(
         qs=qs,
         qt=qs,
         m_factor={"sagittal": m_val, "tangential": m_val},
-        geometry_values={"L_air_m": float(air_gap_val)},
+        geometry_values={"L_air_m": float(air_gap_val), "RoC_m": float(radius_of_curvature_val)},
         cavity_length=float(2 * (air_gap_val + parameters["f_crystal_length"])),
         optical_crystal_length=float(2 * parameters["f_crystal_length"]),
     )
@@ -473,6 +479,17 @@ def compute_derived_cavity_quantities(
     )
 
 
+def _print_instability_warning(m_factor: dict[str, float]) -> None:
+    unstable_planes = [
+        plane
+        for plane, m_value in m_factor.items()
+        if (not np.isfinite(m_value)) or abs(m_value) >= 1.0
+    ]
+    if unstable_planes:
+        plane_list = ", ".join(unstable_planes)
+        print(f"WARNING: Selected point is in an unstable region")
+
+
 def print_single_point_summary(geometry: str, result: CavityOperatingPoint | dict[str, Any]) -> None:
     """Print a concise single-point summary for the selected geometry."""
     operating_point = _coerce_cavity_operating_point(result)
@@ -484,32 +501,38 @@ def print_single_point_summary(geometry: str, result: CavityOperatingPoint | dic
     if geometry == "bowtie":
         print(
             f"Geometrical parameters: long axis = {g['long_axis_m']*1e3:.3f} mm, short axis = {g['short_axis_m']*1e3:.3f} mm, "
-            f"diagonal = {g['diagonal_m']*1e3:.3f} mm, AOI = {g['theta_AOI_deg']:.3f} deg"
+            f"diagonal = {g['diagonal_m']*1e3:.3f} mm, AOI = {g['theta_AOI_deg']:.3f} deg, "
+            f"RoC = {g['RoC_m']*1e3:.3f} mm"
         )
         print(f"m_sagittal = {m['sagittal']:.6f}, m_tangential = {m['tangential']:.6f}")
+        _print_instability_warning(m)
         print(f"qs parameter in the crystal: {qs:.5f}")
         print(f"qt parameter in the crystal: {qt:.5f}")
         return
 
     if geometry == "linear":
-        print(f"Linear cavity parameters: L_cav = {g['L_cav_m']*1e3:.3f} mm")
+        print(f"Linear cavity parameters: L_cav = {g['L_cav_m']*1e3:.3f} mm, RoC = {g['RoC_m']*1e3:.3f} mm")
         print(f"m = {m['sagittal']:.6f} (stable if |m|<1)")
+        _print_instability_warning(m)
         print(f"q parameter at crystal center: {qs:.5f}")
         return
 
     if geometry == "triangle":
         print(
             f"Triangle cavity parameters: width = {g['triangle_width_m']*1e3:.3f} mm, "
-            f"height = {g['triangle_height_m']*1e3:.3f} mm, diagonal = {g['triangle_diagonal_m']*1e3:.3f} mm"
+            f"height = {g['triangle_height_m']*1e3:.3f} mm, diagonal = {g['triangle_diagonal_m']*1e3:.3f} mm, "
+            f"RoC = {g['RoC_m']*1e3:.3f} mm"
         )
         print(f"m_sagittal = {m['sagittal']:.6f}, m_tangential = {m['tangential']:.6f}")
+        _print_instability_warning(m)
         print(f"qs parameter in the crystal: {qs:.5f}")
         print(f"qt parameter in the crystal: {qt:.5f}")
         return
 
     if geometry == "hemilithic":
-        print(f"Hemilithic cavity parameters: L_air = {g['L_air_m']*1e3:.3f} mm")
+        print(f"Hemilithic cavity parameters: L_air = {g['L_air_m']*1e3:.3f} mm, RoC = {g['RoC_m']*1e3:.3f} mm")
         print(f"m = {m['sagittal']:.6f} (stable if |m|<1)")
+        _print_instability_warning(m)
         print(f"q parameter at crystal input face: {qs:.5f}")
         return
 
@@ -593,7 +616,7 @@ def build_cavity_simulation_output(
         "inputs": {
             "crystal_length_m": float(parameters["f_crystal_length"]),
             "n_crystal": float(parameters["f_n_crystal"]),
-            "RoC_m": float(parameters["f_RoC"]),
+            "RoC_m": float(result.operating_point.geometry_values.get("RoC_m", parameters["f_RoC"])),
             "wavelength_m": float(parameters["f_wavelength"]),
             "T_ext": float(parameters["f_T_ext"]),
             "L_rt": float(parameters["f_L_rt"]),

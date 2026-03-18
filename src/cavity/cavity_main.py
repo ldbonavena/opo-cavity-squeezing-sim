@@ -44,7 +44,7 @@ from cavity_workflow import (
 # Geometry selection
 
 # Choose: "bowtie", "linear", "triangle", or "hemilithic"
-GEOMETRY = "bowtie"
+GEOMETRY = "linear"
 
 # %%
 
@@ -69,7 +69,7 @@ f_long_axis = np.arange(70e-3, 120e-3, 0.5e-3)
 mesh_short_axis, mesh_long_axis = np.meshgrid(f_short_axis, f_long_axis)
 
 # Linear parameters
-f_L_cav = 100e-3
+f_L_cav = 50e-3
 
 # Hemilithic parameters
 f_L_air = 20e-3
@@ -137,13 +137,14 @@ fig_waist = plotter.make_waist_plot(
 
 # Explicit single-point selections used for the detailed evaluation step.
 single_point_parameters = {
+    "single_point_RoC_m": 50e-3,
     "bowtie_short_axis_m": 68e-3,
     "bowtie_long_axis_m": 90e-3,
-    "bowtie_theta_AOI_rad": f_theta_AOI,
-    "linear_cavity_length_m": f_L_cav,
+    "bowtie_theta_AOI_rad": 6 * np.pi / 180.0,
+    "linear_cavity_length_m": 50e-3,
     "triangle_width_m": 80e-3,
     "triangle_height_m": 30e-3,
-    "hemilithic_air_gap_m": f_L_air,
+    "hemilithic_air_gap_m": 20e-3,
 }
 
 single_point = compute_cavity_operating_point(context, single_point_parameters)

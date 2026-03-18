@@ -23,6 +23,7 @@ from typing import Any
 
 # Support both package execution and direct interactive execution.
 try:
+    from .crystal_materials import DEFAULT_CRYSTAL_MODEL, build_refractive_index_model
     from .crystal_mode_matching import build_mode_matching_context_from_cavity_output
     from .crystal_plotter import plot_mode_matching_summary, plot_phase_matching_temperature_scan
     from .crystal_workflow import (
@@ -38,6 +39,7 @@ except ImportError:
     import sys
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from crystal.crystal_materials import DEFAULT_CRYSTAL_MODEL, build_refractive_index_model
     from crystal.crystal_mode_matching import build_mode_matching_context_from_cavity_output
     from crystal.crystal_plotter import plot_mode_matching_summary, plot_phase_matching_temperature_scan
     from crystal.crystal_workflow import (
@@ -78,6 +80,8 @@ __all__ = [
 # Simulation configuration
 
 GEOMETRY = "bowtie"
+# Multiple literature models can exist, but one global selection is enforced per run.
+CRYSTAL_MODEL = DEFAULT_CRYSTAL_MODEL
 
 WAVELENGTH_P_M = 775e-9
 WAVELENGTH_S_M = 1550e-9
@@ -96,22 +100,21 @@ QPM_ORDER_M = 1
 SAVE_OUTPUTS = True
 
 
-def n_p_of_T(T_K: float) -> float:
-    """Pump refractive index model versus temperature."""
-    _ = T_K
-    return 1.8
+def _build_temperature_index_function(axis_model, wavelength_m: float):
+    """Bind one axis model to a fixed wavelength for a temperature scan."""
+
+    def _index_of_T(T_K: float) -> float:
+        return float(axis_model(wavelength_m, T_K))
+
+    return _index_of_T
 
 
-def n_s_of_T(T_K: float) -> float:
-    """Signal refractive index model versus temperature."""
-    _ = T_K
-    return 1.75
-
-
-def n_i_of_T(T_K: float) -> float:
-    """Idler refractive index model versus temperature."""
-    _ = T_K
-    return 1.75
+refractive_index_model = build_refractive_index_model(CRYSTAL_MODEL)
+# Bind pump/signal/idler to one model so nx/ny/nz never come from mixed sources.
+n_p_of_T = _build_temperature_index_function(refractive_index_model["n_z_of_T"], WAVELENGTH_P_M)
+n_s_of_T = _build_temperature_index_function(refractive_index_model["n_y_of_T"], WAVELENGTH_S_M)
+n_i_of_T = _build_temperature_index_function(refractive_index_model["n_y_of_T"], WAVELENGTH_I_M)
+mode_matching_n_crystal = float(refractive_index_model["n_y_of_T"](WAVELENGTH_S_M, T0_K))
 
 
 # %%
@@ -145,7 +148,10 @@ phase = compute_crystal_phase_matching(
 # %%
 # Compute mode matching
 
-mode = compute_crystal_mode_matching(context)
+mode = compute_crystal_mode_matching(
+    context,
+    n_crystal=mode_matching_n_crystal,
+)
 
 # %%
 # Build simulation result
@@ -165,6 +171,8 @@ print_crystal_summary(result)
 # Build simulation output
 
 output = build_crystal_simulation_output(result)
+output["inputs"]["crystal_model"] = CRYSTAL_MODEL
+output["inputs"]["n_crystal"] = mode_matching_n_crystal
 
 # %%
 # Generate plots
