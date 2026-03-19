@@ -12,7 +12,11 @@ cavity → crystal → OPO → squeezing
 
 ```
 QPIT-SQZsim/
-    docs/
+    docs/           # Project documentation
+        overview.md
+        architecture.md
+        cavity.md
+        crystal.md
     results/        # local simulation outputs; not intended for version control
     src/
         cavity/     # Cavity geometry and optical mode analysis
