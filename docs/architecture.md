@@ -17,14 +17,14 @@ Implements resonator geometry, round-trip ABCD matrices, Gaussian eigenmode extr
 
 ### `src/crystal/`
 
-Consumes cavity output and evaluates crystal-specific nonlinear metrics.
+Consumes cavity output and runs the crystal design-and-analysis workflow for the intended nonlinear interaction.
 
 - `crystal_main.py`: entry point for the crystal layer
-- `crystal_workflow.py`: orchestrates cavity-output loading, phase matching, and mode matching
+- `crystal_workflow.py`: orchestrates cavity-output loading, design poling, phase matching, mode matching, BK analysis, and export
 - `crystal_materials.py`: refractive-index and thermo-optic helper functions
-- `crystal_phase_matching.py`: `Delta k`, QPM, and temperature scans
+- `crystal_phase_matching.py`: `Delta k`, QPM, design poling, and temperature scans
 - `crystal_mode_matching.py`: converts cavity beam data into focusing and overlap metrics
-- `crystal_boyd_kleinman.py`: focused-beam overlap model
+- `crystal_boyd_kleinman.py`: focused-beam overlap model and BK/QPM analysis helpers
 - `crystal_plotter.py`: crystal result visualizations
 
 ### `src/common/`
@@ -84,12 +84,14 @@ The crystal layer is intentionally downstream of the cavity layer rather than co
 
 High-level flow:
 
-1. `src/crystal/crystal_main.py` selects phase-matching and temperature-scan settings.
+1. `src/crystal/crystal_main.py` selects the crystal model, wavelengths, design temperature, and phase-matching mode.
 2. `src/crystal/crystal_workflow.py` loads `results/<geometry>/cavity/cavity_simulation_output.json`.
 3. The cavity JSON is converted into a `CrystalContext`.
-4. `crystal_phase_matching.py` computes temperature-dependent mismatch and QPM metrics.
-5. `crystal_mode_matching.py` converts cavity waist data into Rayleigh range, focusing parameter, and overlap factors.
-6. The result is serialized to `results/<geometry>/crystal/crystal_simulation_output.json`.
+4. In design mode, `crystal_phase_matching.py` derives the required QPM period from the chosen wavelengths and design temperature. In analysis mode, the configured period is used directly.
+5. `crystal_phase_matching.py` scans temperature-dependent mismatch and QPM metrics to determine the operating temperature.
+6. `crystal_mode_matching.py` converts cavity waist data into Rayleigh range, focusing parameter, and overlap factors using the refractive index at the phase-matching operating temperature.
+7. `crystal_boyd_kleinman.py` assembles BK analysis products, including the BK master map, QPM / poling-length map, and system-specific BK sweeps.
+8. The result is serialized to `results/<geometry>/crystal/crystal_simulation_output.json` together with the BK analysis payload and plot outputs.
 
 Today, the crystal layer relies most directly on:
 

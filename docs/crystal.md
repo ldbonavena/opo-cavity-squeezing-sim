@@ -1,6 +1,6 @@
 # Crystal Module
 
-In QPIT-SQZsim, the crystal layer takes the cavity-derived intracavity mode and asks whether the nonlinear medium supports efficient three-wave interaction under those optical conditions. It combines material dispersion, quasi-phase matching, temperature dependence, and focused-beam overlap.
+In QPIT-SQZsim, the crystal layer takes the cavity-derived intracavity mode and asks whether the nonlinear medium supports efficient three-wave interaction under those optical conditions. The current workflow is design-oriented: for a chosen three-wave process, crystal model, and design temperature, it can derive the required QPM poling period, determine the operating temperature from a phase-matching scan, and then evaluate focused-beam nonlinear overlap.
 
 ## Refractive Index
 
@@ -47,7 +47,7 @@ This is handled by:
 
 in `src/crystal/crystal_phase_matching.py`.
 
-Conceptually, periodic poling compensates the bulk mismatch by resetting the nonlinear phase accumulation. That is why the crystal layer treats the poling period as a first-class input.
+Conceptually, periodic poling compensates the bulk mismatch by resetting the nonlinear phase accumulation. In the current design workflow, the user can either derive the required poling period from wavelengths plus design temperature or analyze a chosen crystal configuration with an explicit period.
 
 ## Temperature Tuning
 
@@ -56,7 +56,7 @@ Temperature affects the crystal model in two ways:
 - refractive indices shift with temperature
 - the poling period can change through thermal expansion
 
-The function `scan_phase_matching_vs_temperature(...)` evaluates these effects over a temperature grid and returns the best operating point together with the full scan arrays. This gives a practical answer to the experimental question: at what crystal temperature is the intended interaction best phase matched?
+The function `scan_phase_matching_vs_temperature(...)` evaluates these effects over a temperature grid and returns the best operating point together with the full scan arrays. In design mode, this scan is performed after the code first derives the QPM period with `compute_design_poling_period(...)` at the chosen design temperature.
 
 ## Gaussian Beam Focusing
 
@@ -99,6 +99,14 @@ This is implemented in `src/crystal/crystal_boyd_kleinman.py`:
 
 The exported `boyd_kleinman_factor` and `effective_nonlinear_overlap` are therefore not purely material properties. They are cavity-conditioned quantities because they depend on the mode that the cavity creates inside the crystal.
 
+The BK analysis layer also exports three related visualizations:
+
+- a universal BK master map `h_BK(\sigma,\xi)`
+- a normalized QPM / poling-length map
+- a system-specific BK sweep analysis figure
+
+The BK master map is theoretical: it shows the normalized BK focusing factor over the abstract control parameters `sigma` and `xi`. The BK reference operating point is system-specific: it is computed from the current cavity mode, phase-matching operating temperature, and selected QPM configuration. The reported BK master-map optimum is the numerical optimum of the universal map, not of the specific cavity/crystal operating point.
+
 ## How Cavity Output Is Used
 
 The cavity-to-crystal handoff is explicit and file-based.
@@ -121,6 +129,21 @@ These become the default optical and geometric context for the crystal workflow.
 
 `build_mode_matching_context_from_cavity_output(...)` in `src/crystal/crystal_mode_matching.py` also reconstructs complex `q_sagittal` and `q_tangential` from the cavity JSON. Even though the current overlap calculation mainly uses the scalar waist, the exported `q` values keep the interface ready for more detailed astigmatic or longitudinal mode treatments.
 
+## Design Workflow
+
+The crystal workflow now follows this order:
+
+1. Load cavity context from the cavity JSON output.
+2. Choose the target wavelengths, crystal model, QPM order, and phase-matching mode.
+3. In design mode, derive the required poling period from the bulk three-wave mismatch at the chosen design temperature.
+4. Scan phase matching versus temperature using that derived or explicitly supplied period.
+5. Determine the operating temperature from the best phase-matching point.
+6. Evaluate the refractive index at the operating temperature for mode matching.
+7. Compute mode matching and BK analysis.
+8. Build the structured result, print the summary, generate plots, and save outputs.
+
+This keeps the crystal layer aligned with how an OPO crystal is normally designed: the wavelengths and temperature define the grating, and the downstream analysis then evaluates that operating point.
+
 ## How Phase Matching Is Computed
 
 The workflow is:
@@ -133,6 +156,14 @@ The workflow is:
 6. Repeat across temperature and locate the best operating point.
 
 This sequencing is implemented by `compute_crystal_phase_matching(...)` in `src/crystal/crystal_workflow.py`, which delegates the actual physics to `src/crystal/crystal_phase_matching.py`.
+
+## Wavelength Sweep Convention
+
+The BK wavelength sweeps keep the pump wavelength fixed and treat the signal wavelength as the scanned variable. The idler wavelength is derived from exact three-wave energy conservation,
+
+`1 / lambda_p = 1 / lambda_s + 1 / lambda_i`
+
+rather than being shifted independently by the same wavelength increment.
 
 ## How Mode Matching Is Handled
 
@@ -148,4 +179,14 @@ The core file responsibilities are:
 - `src/crystal/crystal_boyd_kleinman.py`: focused-beam overlap model
 - `src/crystal/crystal_workflow.py`: orchestration and export
 
-Taken together, these files define the crystal side of the project’s pipeline: cavity mode -> phase matching and focusing -> nonlinear overlap metrics.
+## Output Integration
+
+The crystal summary, plots, and exported JSON now share the same BK metadata. In particular, the structured result includes:
+
+- the BK reference operating point
+- the BK master-map optimum
+- the BK analysis payload used by the crystal plots
+
+The QPM / poling-length figure also uses corrected terminology: the guide curve is a first-order QPM guide in the chosen normalization, not a `Delta k = 0` curve.
+
+Taken together, these files define the crystal side of the project’s pipeline: cavity mode -> design poling and phase matching -> operating-point mode matching -> BK analysis.

@@ -21,7 +21,7 @@ Only the first two layers are implemented today, but the interfaces already refl
 
 The `cavity` layer answers: what mode does the resonator support, and what are its linear dynamical parameters? It produces beam waists, `q` parameters, round-trip length, decay rates, Gouy phases, and detuning-related quantities.
 
-The `crystal` layer answers: given that cavity mode, how well does the nonlinear medium support the intended interaction? It computes refractive-index-dependent phase matching, quasi-phase matching, temperature tuning, and focused-beam overlap through a Boyd-Kleinman-style model.
+The `crystal` layer answers: given that cavity mode, what crystal operating point and QPM period are required, and how well does the nonlinear medium support the intended interaction? It computes refractive-index-dependent phase matching, derives a design poling period when requested, determines the operating temperature, and evaluates focused-beam overlap through a Boyd-Kleinman-style model.
 
 The `opo` layer is reserved for the next step: combining cavity loss, coupling, detuning, and nonlinear interaction strength into threshold and squeezing calculations.
 
