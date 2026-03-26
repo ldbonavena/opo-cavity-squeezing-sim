@@ -1,19 +1,24 @@
-"""Material and thermo-optic helpers for crystal simulations.
+"""Refractive-index and thermo-optic models for crystal simulations.
 
-The default refractive-index baseline is ``Kato2002``. Alternative literature
-models are exposed for comparison, while one selected model is applied
-consistently across the crystal workflow through ``build_refractive_index_model``.
+This module provides the available crystal refractive-index models, but does
+not choose one internally. Model selection must be made externally by the
+workflow or main script. The currently implemented model set is not fully
+axis-distinct: the ``n_x`` branch reuses one shared reference fit across all
+supported literature options, while the implemented model-specific differences
+are in ``n_y`` and ``n_z``.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from functools import lru_cache
+from typing import Callable, Iterator, Mapping, Optional
 
 import numpy as np
 
-
-DEFAULT_CRYSTAL_MODEL = "Kato2002"
+ScalarOrArray = np.ndarray | float
+AxisFunction = Callable[[ScalarOrArray, float], ScalarOrArray]
+SUPPORTED_CRYSTAL_MODELS = ("Kato2002", "Fan1987", "Konig2004")
 
 
 @dataclass(frozen=True)
@@ -46,10 +51,48 @@ class ThermoOpticCoefficients:
 class AxisModel:
     """One axis refractive-index model built from a base Sellmeier and thermo-optic terms."""
 
-    base_index_um: Callable[[np.ndarray | float], np.ndarray | float]
+    base_index_um: Callable[[ScalarOrArray], ScalarOrArray]
     reference_temperature_C: float
     thermo_linear: ThermoOpticCoefficients | None = None
     thermo_quadratic: ThermoOpticCoefficients | None = None
+
+
+@dataclass(frozen=True)
+class LiteratureAxisModelSet:
+    """Axis-model bundle for one literature source.
+
+    The currently supported sources share a common ``n_x`` reference branch.
+    Only ``n_y`` and ``n_z`` differ across the implemented literature fits.
+    """
+
+    n_x_of_T: AxisModel
+    n_y_of_T: AxisModel
+    n_z_of_T: AxisModel
+
+
+@dataclass(frozen=True)
+class RefractiveIndexModel(Mapping[str, object]):
+    """Structured refractive-index model with backward-compatible mapping access."""
+
+    model_name: str
+    n_x_of_T: AxisFunction
+    n_y_of_T: AxisFunction
+    n_z_of_T: AxisFunction
+
+    def __getitem__(self, key: str) -> object:
+        try:
+            return getattr(self, key)
+        except AttributeError as exc:
+            raise KeyError(key) from exc
+
+    def __iter__(self) -> Iterator[str]:
+        yield "model_name"
+        yield "n_x_of_T"
+        yield "n_y_of_T"
+        yield "n_z_of_T"
+
+    def __len__(self) -> int:
+        return 4
 
 
 def central_diff(f: Callable[[float], float], x: float, dx: float) -> float:
@@ -57,7 +100,7 @@ def central_diff(f: Callable[[float], float], x: float, dx: float) -> float:
     return (f(x + dx) - f(x - dx)) / (2.0 * dx)
 
 
-def n_sellmeier_um(lambda_um: np.ndarray | float, coeffs: SellmeierCoefficients) -> np.ndarray | float:
+def n_sellmeier_um(lambda_um: ScalarOrArray, coeffs: SellmeierCoefficients) -> ScalarOrArray:
     """Evaluate refractive index from a standard Sellmeier model."""
     lam2 = np.asarray(lambda_um, dtype=float) ** 2
     n2 = (
@@ -71,12 +114,12 @@ def n_sellmeier_um(lambda_um: np.ndarray | float, coeffs: SellmeierCoefficients)
 
 
 def n_from_model(
-    wavelength_m: np.ndarray | float,
+    wavelength_m: ScalarOrArray,
     T_K: float,
-    n_lambda: Callable[[np.ndarray | float], np.ndarray | float],
+    n_lambda: Callable[[ScalarOrArray], ScalarOrArray],
     dn_dT_perK: Optional[Callable[[float], float]] = None,
     T_ref_K: float = 293.15,
-) -> np.ndarray | float:
+) -> ScalarOrArray:
     """Evaluate ``n(λ, T)`` from base ``n(λ)`` and an optional linear ``dn/dT`` term."""
     n0 = n_lambda(wavelength_m)
     if dn_dT_perK is None:
@@ -100,23 +143,23 @@ def dn_dT_numeric(
     return central_diff(n_of_T, T_K, dT_K)
 
 
-def _to_lambda_um(wavelength_m: np.ndarray | float) -> np.ndarray | float:
+def _to_lambda_um(wavelength_m: ScalarOrArray) -> ScalarOrArray:
     lam_um = np.asarray(wavelength_m, dtype=float) * 1e6
     return lam_um if isinstance(wavelength_m, np.ndarray) else float(lam_um)
 
 
-def _sellmeier_reference_um(lambda_um: np.ndarray | float, coeffs: SellmeierCoefficients) -> np.ndarray | float:
+def _sellmeier_reference_um(lambda_um: ScalarOrArray, coeffs: SellmeierCoefficients) -> ScalarOrArray:
     """Evaluate the five-coefficient Sellmeier form used for Kato2002."""
     return n_sellmeier_um(lambda_um, coeffs)
 
 
 def _sellmeier_fan_konig_um(
-    lambda_um: np.ndarray | float,
+    lambda_um: ScalarOrArray,
     b0: float,
     b1: float,
     b2: float,
     b3: float,
-) -> np.ndarray | float:
+) -> ScalarOrArray:
     """Evaluate the reduced Sellmeier form used in Fan1987 and Konig2004."""
     lam = np.asarray(lambda_um, dtype=float)
     n = np.sqrt(b0 + b1 / (1.0 - b2 / lam**2) - b3 * lam**2)
@@ -124,32 +167,78 @@ def _sellmeier_fan_konig_um(
 
 
 def _sellmeier_fradkin_um(
-    lambda_um: np.ndarray | float,
+    lambda_um: ScalarOrArray,
     b0: float,
     b1: float,
     b2: float,
     b3: float,
     b4: float,
     b5: float,
-) -> np.ndarray | float:
+) -> ScalarOrArray:
     """Evaluate the six-coefficient Sellmeier form used by Fradkin1999."""
     lam = np.asarray(lambda_um, dtype=float)
     n = np.sqrt(b0 + b1 / (1.0 - b2 / lam**2) + b3 / (1.0 - b4 / lam**2) - b5 * lam**2)
     return n if isinstance(lambda_um, np.ndarray) else float(n)
 
 
-def _deltan_coeff(lambda_um: np.ndarray | float, coeffs: ThermoOpticCoefficients) -> np.ndarray | float:
+def _deltan_coeff(lambda_um: ScalarOrArray, coeffs: ThermoOpticCoefficients) -> ScalarOrArray:
     """Evaluate the wavelength-dependent thermo-optic polynomial from the reference model."""
     lam = np.asarray(lambda_um, dtype=float)
     dn = coeffs.a0 + coeffs.a1 / lam + coeffs.a2 / lam**2 + coeffs.a3 / lam**3
     return dn if isinstance(lambda_um, np.ndarray) else float(dn)
 
 
+def _nx_reference_um(lambda_um: ScalarOrArray) -> ScalarOrArray:
+    """Shared ``n_x`` reference fit reused across all supported model options."""
+    return _sellmeier_reference_um(
+        lambda_um,
+        SellmeierCoefficients(3.29100, 0.04140, 0.03978, 9.35522, 31.45571),
+    )
+
+
+def _ny_kato2002_um(lambda_um: ScalarOrArray) -> ScalarOrArray:
+    return _sellmeier_reference_um(
+        lambda_um,
+        SellmeierCoefficients(3.45018, 0.04341, 0.04597, 16.98825, 39.43799),
+    )
+
+
+def _nz_kato2002_um(lambda_um: ScalarOrArray) -> ScalarOrArray:
+    return _sellmeier_reference_um(
+        lambda_um,
+        SellmeierCoefficients(4.59423, 0.06206, 0.04763, 110.80672, 86.12171),
+    )
+
+
+def _ny_fan1987_um(lambda_um: ScalarOrArray) -> ScalarOrArray:
+    return _sellmeier_fan_konig_um(lambda_um, 2.19229, 0.83547, 0.04970, 0.01621)
+
+
+def _nz_fan1987_um(lambda_um: ScalarOrArray) -> ScalarOrArray:
+    return _sellmeier_fan_konig_um(lambda_um, 2.25411, 1.06543, 0.05486, 0.02140)
+
+
+def _ny_konig2004_um(lambda_um: ScalarOrArray) -> ScalarOrArray:
+    return _sellmeier_fan_konig_um(lambda_um, 2.09930, 0.922683, 0.0467695, 0.0138408)
+
+
+def _nz_konig2004_um(lambda_um: ScalarOrArray) -> ScalarOrArray:
+    return _sellmeier_fradkin_um(
+        lambda_um,
+        2.12725,
+        1.18431,
+        0.0514852,
+        0.66030,
+        100.00507,
+        9.68956e-3,
+    )
+
+
 def _evaluate_axis_model(
-    wavelength_m: np.ndarray | float,
+    wavelength_m: ScalarOrArray,
     T_K: float,
     axis_model: AxisModel,
-) -> np.ndarray | float:
+) -> ScalarOrArray:
     """Evaluate one axis model at wavelength ``wavelength_m`` and temperature ``T_K``."""
     lambda_um = _to_lambda_um(wavelength_m)
     base_n = axis_model.base_index_um(lambda_um)
@@ -157,6 +246,9 @@ def _evaluate_axis_model(
     if axis_model.thermo_linear is None and axis_model.thermo_quadratic is None:
         return base_n
 
+    # The literature thermo-optic terms are referenced to a specific temperature
+    # in degrees Celsius, so the workflow temperature in Kelvin is converted to
+    # a Celsius offset relative to that reference point here.
     delta_T_C = float(T_K) - 273.15 - axis_model.reference_temperature_C
     n = np.asarray(base_n, dtype=float)
 
@@ -169,10 +261,10 @@ def _evaluate_axis_model(
 
 
 _COMMON_NX_MODEL = AxisModel(
-    base_index_um=lambda lam_um: _sellmeier_reference_um(
-        lam_um,
-        SellmeierCoefficients(3.29100, 0.04140, 0.03978, 9.35522, 31.45571),
-    ),
+    # Kato2002 is the default baseline. Fan1987 and Konig2004 currently reuse
+    # this shared ``n_x`` reference branch unchanged; only ``n_y`` and ``n_z``
+    # differ across the implemented literature fits.
+    base_index_um=_nx_reference_um,
     reference_temperature_C=25.0,
 )
 
@@ -181,135 +273,119 @@ _THERMO_NY_QUADRATIC = ThermoOpticCoefficients(-0.14445e-8, 2.2244e-8, -3.5770e-
 _THERMO_NZ_LINEAR = ThermoOpticCoefficients(9.9587e-6, 9.9228e-6, -8.9603e-6, 4.1010e-6)
 _THERMO_NZ_QUADRATIC = ThermoOpticCoefficients(-1.1882e-8, 10.459e-8, -9.8136e-8, 3.1481e-8)
 
-_MODEL_SPECS: dict[str, dict[str, AxisModel]] = {
-    "Kato2002": {
-        "n_x_of_T": _COMMON_NX_MODEL,
-        "n_y_of_T": AxisModel(
-            base_index_um=lambda lam_um: _sellmeier_reference_um(
-                lam_um,
-                SellmeierCoefficients(3.45018, 0.04341, 0.04597, 16.98825, 39.43799),
-            ),
+_MODEL_SPECS: dict[str, LiteratureAxisModelSet] = {
+    "Kato2002": LiteratureAxisModelSet(
+        n_x_of_T=_COMMON_NX_MODEL,
+        n_y_of_T=AxisModel(
+            base_index_um=_ny_kato2002_um,
             reference_temperature_C=20.0,
             thermo_linear=_THERMO_NY_LINEAR,
             thermo_quadratic=_THERMO_NY_QUADRATIC,
         ),
-        "n_z_of_T": AxisModel(
-            base_index_um=lambda lam_um: _sellmeier_reference_um(
-                lam_um,
-                SellmeierCoefficients(4.59423, 0.06206, 0.04763, 110.80672, 86.12171),
-            ),
+        n_z_of_T=AxisModel(
+            base_index_um=_nz_kato2002_um,
             reference_temperature_C=20.0,
             thermo_linear=_THERMO_NZ_LINEAR,
             thermo_quadratic=_THERMO_NZ_QUADRATIC,
         ),
-    },
-    "Fan1987": {
-        "n_x_of_T": _COMMON_NX_MODEL,
-        "n_y_of_T": AxisModel(
-            base_index_um=lambda lam_um: _sellmeier_fan_konig_um(lam_um, 2.19229, 0.83547, 0.04970, 0.01621),
+    ),
+    "Fan1987": LiteratureAxisModelSet(
+        n_x_of_T=_COMMON_NX_MODEL,
+        n_y_of_T=AxisModel(
+            base_index_um=_ny_fan1987_um,
             reference_temperature_C=25.0,
             thermo_linear=_THERMO_NY_LINEAR,
             thermo_quadratic=_THERMO_NY_QUADRATIC,
         ),
-        "n_z_of_T": AxisModel(
-            base_index_um=lambda lam_um: _sellmeier_fan_konig_um(lam_um, 2.25411, 1.06543, 0.05486, 0.02140),
+        n_z_of_T=AxisModel(
+            base_index_um=_nz_fan1987_um,
             reference_temperature_C=25.0,
             thermo_linear=_THERMO_NZ_LINEAR,
             thermo_quadratic=_THERMO_NZ_QUADRATIC,
         ),
-    },
-    "Konig2004": {
-        "n_x_of_T": _COMMON_NX_MODEL,
-        "n_y_of_T": AxisModel(
-            base_index_um=lambda lam_um: _sellmeier_fan_konig_um(lam_um, 2.09930, 0.922683, 0.0467695, 0.0138408),
+    ),
+    "Konig2004": LiteratureAxisModelSet(
+        n_x_of_T=_COMMON_NX_MODEL,
+        n_y_of_T=AxisModel(
+            base_index_um=_ny_konig2004_um,
             reference_temperature_C=25.0,
             thermo_linear=_THERMO_NY_LINEAR,
             thermo_quadratic=_THERMO_NY_QUADRATIC,
         ),
-        "n_z_of_T": AxisModel(
-            base_index_um=lambda lam_um: _sellmeier_fradkin_um(
-                lam_um,
-                2.12725,
-                1.18431,
-                0.0514852,
-                0.66030,
-                100.00507,
-                9.68956e-3,
-            ),
+        n_z_of_T=AxisModel(
+            base_index_um=_nz_konig2004_um,
             reference_temperature_C=25.0,
             thermo_linear=_THERMO_NZ_LINEAR,
             thermo_quadratic=_THERMO_NZ_QUADRATIC,
         ),
-    },
+    ),
 }
 
 
 def supported_crystal_models() -> tuple[str, ...]:
-    """Return supported literature models, with ``Kato2002`` as the default baseline."""
-    return tuple(_MODEL_SPECS)
+    """Return the supported literature models."""
+    return SUPPORTED_CRYSTAL_MODELS
 
 
 def _validate_model_name(model_name: str) -> str:
-    if model_name not in _MODEL_SPECS:
-        supported = ", ".join(supported_crystal_models())
-        raise ValueError(f"Unknown crystal model '{model_name}'. Supported models: {supported}")
+    if model_name not in SUPPORTED_CRYSTAL_MODELS:
+        supported = ", ".join(SUPPORTED_CRYSTAL_MODELS)
+        raise ValueError(f"Unknown crystal model: {model_name}. Supported models: {supported}")
     return model_name
 
 
-def build_refractive_index_model(model_name: str = DEFAULT_CRYSTAL_MODEL) -> dict[str, Any]:
-    """Build axis functions for one literature model.
+def _build_axis_function(axis_model: AxisModel) -> AxisFunction:
+    return lambda wavelength_m, T_K: _evaluate_axis_model(wavelength_m, T_K, axis_model)
 
-    ``Kato2002`` is the default physically consistent baseline. ``Fan1987`` and
-    ``Konig2004`` are available for comparison only.
-    """
+
+@lru_cache(maxsize=None)
+def build_refractive_index_model(model_name: str) -> RefractiveIndexModel:
+    """Build axis functions for one explicitly selected literature model."""
 
     selected_model = _validate_model_name(model_name)
     model_spec = _MODEL_SPECS[selected_model]
-
-    def _axis_function(axis_key: str) -> Callable[[np.ndarray | float, float], np.ndarray | float]:
-        axis_model = model_spec[axis_key]
-        return lambda wavelength_m, T_K: _evaluate_axis_model(wavelength_m, T_K, axis_model)
-
-    return {
-        "model_name": selected_model,
-        "n_x_of_T": _axis_function("n_x_of_T"),
-        "n_y_of_T": _axis_function("n_y_of_T"),
-        "n_z_of_T": _axis_function("n_z_of_T"),
-    }
+    return RefractiveIndexModel(
+        model_name=selected_model,
+        n_x_of_T=_build_axis_function(model_spec.n_x_of_T),
+        n_y_of_T=_build_axis_function(model_spec.n_y_of_T),
+        n_z_of_T=_build_axis_function(model_spec.n_z_of_T),
+    )
 
 
 def nx(
-    lambda_m: np.ndarray | float,
+    lambda_m: ScalarOrArray,
     T_K: float,
-    model: str = DEFAULT_CRYSTAL_MODEL,
-) -> np.ndarray | float:
+    model: str,
+) -> ScalarOrArray:
     """Return ``n_x(λ, T)`` for the selected literature model."""
-    return build_refractive_index_model(model)["n_x_of_T"](lambda_m, T_K)
+    return build_refractive_index_model(model).n_x_of_T(lambda_m, T_K)
 
 
 def ny(
-    lambda_m: np.ndarray | float,
+    lambda_m: ScalarOrArray,
     T_K: float,
-    model: str = DEFAULT_CRYSTAL_MODEL,
-) -> np.ndarray | float:
+    model: str,
+) -> ScalarOrArray:
     """Return ``n_y(λ, T)`` for the selected literature model."""
-    return build_refractive_index_model(model)["n_y_of_T"](lambda_m, T_K)
+    return build_refractive_index_model(model).n_y_of_T(lambda_m, T_K)
 
 
 def nz(
-    lambda_m: np.ndarray | float,
+    lambda_m: ScalarOrArray,
     T_K: float,
-    model: str = DEFAULT_CRYSTAL_MODEL,
-) -> np.ndarray | float:
+    model: str,
+) -> ScalarOrArray:
     """Return ``n_z(λ, T)`` for the selected literature model."""
-    return build_refractive_index_model(model)["n_z_of_T"](lambda_m, T_K)
+    return build_refractive_index_model(model).n_z_of_T(lambda_m, T_K)
 
 
 __all__ = [
-    "DEFAULT_CRYSTAL_MODEL",
+    "SUPPORTED_CRYSTAL_MODELS",
     "SellmeierCoefficients",
     "ThermoOpticCoefficients",
     "AxisModel",
+    "LiteratureAxisModelSet",
+    "RefractiveIndexModel",
     "central_diff",
     "n_sellmeier_um",
     "n_from_model",

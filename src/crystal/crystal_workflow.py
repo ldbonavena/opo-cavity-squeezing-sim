@@ -22,6 +22,12 @@ from .crystal_mode_matching import (
     build_mode_matching_context_from_cavity_output,
     estimate_mode_matching_quantities,
 )
+from .crystal_boyd_kleinman import (
+    BKAnalysisConfig,
+    bk_analysis_result_to_dict,
+    run_bk_analysis,
+)
+from .crystal_phase_matching import compute_design_poling_period as compute_design_poling_period_from_material_model
 from .crystal_phase_matching import scan_phase_matching_vs_temperature
 
 
@@ -45,6 +51,7 @@ class CrystalSimulationResult:
     context: CrystalContext
     phase_matching: dict[str, Any]
     mode_matching: ModeMatchingResult
+    bk_analysis: dict[str, Any] | None = None
 
 
 def _load_cavity_output_data(path: str | Path) -> dict[str, Any]:
@@ -122,6 +129,29 @@ def compute_crystal_phase_matching(
     return _phase_matching_scan_to_output(scan)
 
 
+def compute_design_poling_period(
+    wavelength_p_m: float,
+    wavelength_s_m: float,
+    wavelength_i_m: float,
+    temperature_K: float,
+    n_p_of_lambda_T: Callable[[float, float], float],
+    n_s_of_lambda_T: Callable[[float, float], float],
+    n_i_of_lambda_T: Callable[[float, float], float],
+    qpm_order_m: int = 1,
+) -> Any:
+    """Compute the design poling period from wavelengths and one design temperature."""
+    return compute_design_poling_period_from_material_model(
+        wavelength_p_m=wavelength_p_m,
+        wavelength_s_m=wavelength_s_m,
+        wavelength_i_m=wavelength_i_m,
+        temperature_K=temperature_K,
+        n_p_of_lambda_T=n_p_of_lambda_T,
+        n_s_of_lambda_T=n_s_of_lambda_T,
+        n_i_of_lambda_T=n_i_of_lambda_T,
+        qpm_order_m=qpm_order_m,
+    )
+
+
 def compute_crystal_mode_matching(
     context: CrystalContext,
     n_crystal: float | None = None,
@@ -140,16 +170,70 @@ def compute_crystal_mode_matching(
     )
 
 
+def compute_boyd_kleinman_analysis(
+    context: CrystalContext,
+    mode_matching: ModeMatchingResult,
+    n_p_of_T: Callable[[float], float],
+    n_s_of_T: Callable[[float], float],
+    n_i_of_T: Callable[[float], float],
+    n_p_of_lambda_T: Callable[[float, float], float],
+    n_s_of_lambda_T: Callable[[float, float], float],
+    n_i_of_lambda_T: Callable[[float, float], float],
+    wavelength_p_m: float,
+    wavelength_s_m: float,
+    wavelength_i_m: float,
+    Lambda0_m: float,
+    T_min_K: float,
+    T_max_K: float,
+    n_T: int,
+    T0_K: float = 293.15,
+    alpha_perK: float = 0.0,
+    qpm_order_m: int = 1,
+    phase_matching: dict[str, Any] | None = None,
+    bk_config: BKAnalysisConfig | None = None,
+) -> dict[str, Any]:
+    """Orchestrate BK analysis and expose the plotting-compatible dictionary payload.
+
+    The workflow layer delegates all BK-specific reference construction,
+    sweeps, normalization, defaults, and metadata assembly to
+    ``crystal_boyd_kleinman``.
+    """
+    del T_min_K, T_max_K
+    bk_result = run_bk_analysis(
+        context=context,
+        mode_matching=mode_matching,
+        n_p_of_T=n_p_of_T,
+        n_s_of_T=n_s_of_T,
+        n_i_of_T=n_i_of_T,
+        n_p_of_lambda_T=n_p_of_lambda_T,
+        n_s_of_lambda_T=n_s_of_lambda_T,
+        n_i_of_lambda_T=n_i_of_lambda_T,
+        wavelength_p_m=wavelength_p_m,
+        wavelength_s_m=wavelength_s_m,
+        wavelength_i_m=wavelength_i_m,
+        Lambda0_m=Lambda0_m,
+        T0_K=T0_K,
+        alpha_perK=alpha_perK,
+        qpm_order_m=qpm_order_m,
+        phase_matching=phase_matching,
+        n_temperature=n_T,
+        bk_config=bk_config,
+    )
+    return bk_analysis_result_to_dict(bk_result)
+
+
 def build_crystal_simulation_result(
     context: CrystalContext,
     phase_matching: dict[str, Any],
     mode_matching: ModeMatchingResult,
+    bk_analysis: dict[str, Any] | None = None,
 ) -> CrystalSimulationResult:
     """Build the structured crystal workflow result."""
     return CrystalSimulationResult(
         context=context,
         phase_matching=phase_matching,
         mode_matching=mode_matching,
+        bk_analysis=bk_analysis,
     )
 
 
@@ -157,6 +241,7 @@ def print_crystal_summary(result: CrystalSimulationResult) -> None:
     """Print concise phase-matching and mode-matching summary."""
     phase = result.phase_matching
     mode = result.mode_matching
+    bk_analysis = result.bk_analysis
     t_best = float(phase["T_best_K"][0])
     pm_best = float(phase["pm_power_best"][0])
 
@@ -171,6 +256,27 @@ def print_crystal_summary(result: CrystalSimulationResult) -> None:
     print(f"Boyd-Kleinman factor: {mode.boyd_kleinman_factor:.6f}")
     print(f"Effective nonlinear overlap: {mode.effective_nonlinear_overlap:.6f}")
 
+    if bk_analysis is not None:
+        reference = bk_analysis.get("reference", {})
+        sigma_reference = reference.get("sigma_reference")
+        xi_reference = reference.get("xi_reference")
+        bk_reference_factor = reference.get("bk_reference_factor", mode.boyd_kleinman_factor)
+        bk_master_sigma_opt = bk_analysis.get("bk_master_sigma_opt")
+        bk_master_xi_opt = bk_analysis.get("bk_master_xi_opt")
+        bk_master_h_opt = bk_analysis.get("bk_master_h_opt")
+
+        if sigma_reference is not None and xi_reference is not None:
+            print(f"BK reference point (sigma, xi): ({float(sigma_reference):.6f}, {float(xi_reference):.6f})")
+        if bk_reference_factor is not None:
+            print(f"BK reference factor: {float(bk_reference_factor):.6f}")
+        if bk_master_sigma_opt is not None and bk_master_xi_opt is not None:
+            print(
+                "BK master-map optimum (sigma, xi): "
+                f"({float(bk_master_sigma_opt):.6f}, {float(bk_master_xi_opt):.6f})"
+            )
+        if bk_master_h_opt is not None:
+            print(f"BK master-map optimum factor: {float(bk_master_h_opt):.6f}")
+
 
 def _build_crystal_inputs_payload(context: CrystalContext) -> dict[str, Any]:
     return {
@@ -183,10 +289,13 @@ def _build_crystal_inputs_payload(context: CrystalContext) -> dict[str, Any]:
 
 
 def _build_crystal_results_payload(result: CrystalSimulationResult) -> dict[str, Any]:
-    return {
+    payload = {
         "phase_matching": result.phase_matching,
         "mode_matching": asdict(result.mode_matching),
     }
+    if result.bk_analysis is not None:
+        payload["boyd_kleinman_analysis"] = result.bk_analysis
+    return payload
 
 
 def build_crystal_simulation_output(result: CrystalSimulationResult) -> dict[str, Any]:
@@ -201,18 +310,54 @@ def build_crystal_simulation_output(result: CrystalSimulationResult) -> dict[str
 def save_crystal_outputs(
     geometry: str,
     output: dict[str, Any],
-    fig_phase,
-    fig_mode,
+    fig_bk_master=None,
+    fig_qpm=None,
+    fig_bk=None,
+    legacy_fig_unused=None,
     results_root: str | Path | None = None,
 ) -> dict[str, str]:
     """Save crystal JSON and plots under ``results/<geometry>/crystal/``."""
+    # Backward compatibility:
+    # `save_crystal_outputs(geometry, output, fig_bk)`
+    # `save_crystal_outputs(geometry, output, fig_phase, fig_mode)`
+    # `save_crystal_outputs(geometry, output, fig_bk_master, fig_qpm, fig_bk)`
+    if fig_bk is None and fig_qpm is None and fig_bk_master is not None and hasattr(fig_bk_master, "savefig"):
+        fig_bk = fig_bk_master
+        fig_bk_master = None
+
+    if results_root is None and isinstance(legacy_fig_unused, (str, Path)):
+        results_root = legacy_fig_unused
+        legacy_fig_unused = None
+
+    if fig_bk is None and fig_qpm is not None and hasattr(fig_qpm, "savefig"):
+        fig_bk = fig_qpm
+        fig_qpm = None
+
+    if (
+        fig_bk is not None
+        and fig_qpm is not None
+        and hasattr(fig_bk_master, "savefig")
+        and hasattr(fig_qpm, "savefig")
+        and not hasattr(fig_bk, "savefig")
+    ):
+        fig_bk = fig_qpm
+        fig_qpm = None
+
+    if results_root is None and legacy_fig_unused is not None and not isinstance(legacy_fig_unused, (str, Path)):
+        if fig_bk is None and hasattr(legacy_fig_unused, "savefig"):
+            fig_bk = legacy_fig_unused
+        legacy_fig_unused = None
+
     ensure_geometry_results_subdirs(geometry, results_root=results_root)
     result_dir = get_crystal_results_dir(geometry, results_root=results_root)
     project_root = Path(__file__).resolve().parents[2]
 
     json_path = result_dir / "crystal_simulation_output.json"
-    phase_path = result_dir / "phase_matching_scan.png"
-    mode_path = result_dir / "mode_matching_summary.png"
+    bk_master_path = result_dir / "boyd_kleinman_master_map.png"
+    qpm_path = result_dir / "qpm_length_poling_map.png"
+    bk_path = result_dir / "boyd_kleinman_analysis.png"
+    old_phase_path = result_dir / "phase_matching_scan.png"
+    old_mode_path = result_dir / "mode_matching_summary.png"
 
     def _repo_relative(path: Path) -> str:
         try:
@@ -223,17 +368,33 @@ def save_crystal_outputs(
     with json_path.open("w", encoding="utf-8") as f:
         json.dump(output, f, indent=2)
 
-    if fig_phase is not None:
-        fig_phase.savefig(phase_path, dpi=300, bbox_inches="tight")
-    if fig_mode is not None:
-        fig_mode.savefig(mode_path, dpi=300, bbox_inches="tight")
+    # Remove legacy plot files so the crystal results directory reflects the
+    # current single-figure BK workflow after a fresh save.
+    for legacy_path in (old_phase_path, old_mode_path):
+        if legacy_path.exists():
+            legacy_path.unlink()
 
-    return {
+    if fig_bk_master is not None:
+        fig_bk_master.savefig(bk_master_path, dpi=300, bbox_inches="tight")
+    if fig_qpm is not None:
+        fig_qpm.savefig(qpm_path, dpi=300, bbox_inches="tight")
+    if fig_bk is not None:
+        fig_bk.savefig(bk_path, dpi=300, bbox_inches="tight")
+
+    outputs = {
         "result_dir": _repo_relative(result_dir),
         "crystal_output_json": _repo_relative(json_path),
-        "phase_matching_scan_png": _repo_relative(phase_path),
-        "mode_matching_summary_png": _repo_relative(mode_path),
     }
+    if fig_bk_master is not None:
+        outputs["boyd_kleinman_master_map_png"] = _repo_relative(bk_master_path)
+    if fig_qpm is not None:
+        outputs["qpm_length_poling_map_png"] = _repo_relative(qpm_path)
+    if fig_bk is not None:
+        bk_relpath = _repo_relative(bk_path)
+        outputs["boyd_kleinman_analysis_png"] = bk_relpath
+        outputs["phase_matching_scan_png"] = bk_relpath
+        outputs["mode_matching_summary_png"] = bk_relpath
+    return outputs
 
 
 __all__ = [
@@ -241,7 +402,9 @@ __all__ = [
     "CrystalSimulationResult",
     "load_cavity_context_for_crystal",
     "compute_crystal_phase_matching",
+    "compute_design_poling_period",
     "compute_crystal_mode_matching",
+    "compute_boyd_kleinman_analysis",
     "build_crystal_simulation_result",
     "build_crystal_simulation_output",
     "print_crystal_summary",

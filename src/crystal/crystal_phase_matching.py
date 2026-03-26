@@ -31,6 +31,15 @@ class PhaseMatchingResult:
     Lambda_T_m: float
 
 
+@dataclass(frozen=True)
+class DesignPolingResult:
+    """Design-stage QPM result derived from wavelengths and one temperature."""
+
+    temperature_K: float
+    delta_k_bulk_rad_per_m: float
+    Lambda0_design_m: float
+
+
 def k_of_n(wavelength_m: np.ndarray | float, n: np.ndarray | float) -> np.ndarray | float:
     """Return wave-vector magnitude ``k = 2πn/λ`` in rad/m."""
     wl = np.asarray(wavelength_m, dtype=float)
@@ -52,6 +61,30 @@ def delta_k_three_wave(
     k_s = k_of_n(wavelength_s_m, n_s)
     k_i = k_of_n(wavelength_i_m, n_i)
     return float(k_p - k_s - k_i)
+
+
+def compute_design_poling_period(
+    wavelength_p_m: float,
+    wavelength_s_m: float,
+    wavelength_i_m: float,
+    temperature_K: float,
+    n_p_of_lambda_T: Callable[[float, float], float],
+    n_s_of_lambda_T: Callable[[float, float], float],
+    n_i_of_lambda_T: Callable[[float, float], float],
+    qpm_order_m: int,
+) -> DesignPolingResult:
+    """Return the poling period required for phase matching at one temperature."""
+    n_p = float(n_p_of_lambda_T(wavelength_p_m, temperature_K))
+    n_s = float(n_s_of_lambda_T(wavelength_s_m, temperature_K))
+    n_i = float(n_i_of_lambda_T(wavelength_i_m, temperature_K))
+    delta_k_bulk = delta_k_three_wave(wavelength_p_m, wavelength_s_m, wavelength_i_m, n_p, n_s, n_i)
+    if not np.isfinite(delta_k_bulk) or np.isclose(delta_k_bulk, 0.0):
+        raise ValueError("Cannot design poling period because the bulk phase mismatch is zero or non-finite.")
+    return DesignPolingResult(
+        temperature_K=float(temperature_K),
+        delta_k_bulk_rad_per_m=float(delta_k_bulk),
+        Lambda0_design_m=float(2.0 * np.pi * qpm_order_m / delta_k_bulk),
+    )
 
 
 def qpm_grating_k(Lambda_m: float) -> float:
@@ -142,7 +175,7 @@ def scan_phase_matching_vs_temperature(
     alpha_perK: float = 0.0,
     qpm_order_m: int = 1,
 ) -> dict[str, np.ndarray]:
-    """Scan phase-matching metrics over a temperature grid."""
+    """Scan phase-matching metrics over a temperature grid for a chosen QPM period."""
     Ts = np.linspace(float(T_min_K), float(T_max_K), int(n_T))
 
     n_p_vals = np.empty_like(Ts)
@@ -177,6 +210,7 @@ def scan_phase_matching_vs_temperature(
         Lambda_vals[i] = res.Lambda_T_m
 
     i_best = int(np.argmax(pm_vals))
+    i_reference = int(np.argmin(np.abs(dk_eff_vals)))
 
     return {
         "T_K": Ts,
@@ -189,14 +223,19 @@ def scan_phase_matching_vs_temperature(
         "Lambda_T_m": Lambda_vals,
         "T_best_K": np.array([Ts[i_best]]),
         "pm_power_best": np.array([pm_vals[i_best]]),
+        "Lambda0_input_m": np.array([float(Lambda0_m)]),
+        "Lambda0_effective_m": np.array([float(Lambda0_m)]),
+        "T_reference_for_lambda_opt_K": np.array([Ts[i_reference]]),
     }
 
 
 __all__ = [
     "PhaseMatchingResult",
+    "DesignPolingResult",
     "sinc",
     "k_of_n",
     "delta_k_three_wave",
+    "compute_design_poling_period",
     "qpm_grating_k",
     "delta_k_qpm",
     "pm_amplitude_factor",

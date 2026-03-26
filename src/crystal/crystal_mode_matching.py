@@ -88,7 +88,6 @@ def estimate_mode_matching_quantities(
     confocal = 2.0 * zR
     xi = compute_focusing_parameter(crystal_length_m, zR)
     bk = boyd_kleinman_efficiency(
-        waist_m=waist_crystal_m,
         rayleigh_range_m=zR,
         crystal_length_m=crystal_length_m,
         delta_k=delta_k_rad_per_m,

@@ -3,17 +3,22 @@
 from __future__ import annotations
 
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 import numpy as np
 
 from .crystal_boyd_kleinman import boyd_kleinman_efficiency
 
 
 def plot_phase_matching_temperature_scan(scan: dict[str, np.ndarray]):
-    """Plot phase-matching power and mismatch versus temperature."""
-    T_K = scan["T_K"]
-    pm = scan["pm_power"]
-    dk = scan["delta_k_rad_per_m"]
-    dk_eff = scan["delta_k_eff_rad_per_m"]
+    """Plot phase-matching power and mismatch versus temperature.
+
+    This legacy figure remains available for direct visualization, but it does
+    not participate in the BK analysis workflow.
+    """
+    T_K = np.asarray(scan["T_K"], dtype=float)
+    pm = np.asarray(scan["pm_power"], dtype=float)
+    dk = np.asarray(scan["delta_k_rad_per_m"], dtype=float)
+    dk_eff = np.asarray(scan["delta_k_eff_rad_per_m"], dtype=float)
 
     fig, axes = plt.subplots(2, 1, figsize=(8, 7), sharex=True)
     axes[0].plot(T_K, pm, lw=2)
@@ -32,7 +37,7 @@ def plot_phase_matching_temperature_scan(scan: dict[str, np.ndarray]):
 
 
 def plot_mode_matching_summary(mode_result: dict[str, float]):
-    """Plot a compact bar chart for main mode-matching quantities."""
+    """Plot a compact legacy bar chart for mode-matching quantities only."""
     labels = [
         "waist [um]",
         "zR [mm]",
@@ -40,10 +45,10 @@ def plot_mode_matching_summary(mode_result: dict[str, float]):
         "xi [-]",
     ]
     values = [
-        mode_result["waist_crystal_m"] * 1e6,
-        mode_result["rayleigh_range_m"] * 1e3,
-        mode_result["confocal_parameter_m"] * 1e3,
-        mode_result["focusing_parameter"],
+        float(mode_result["waist_crystal_m"]) * 1e6,
+        float(mode_result["rayleigh_range_m"]) * 1e3,
+        float(mode_result["confocal_parameter_m"]) * 1e3,
+        float(mode_result.get("focusing_parameter_xi", mode_result["focusing_parameter"])),
     ]
 
     fig, ax = plt.subplots(figsize=(8, 4))
@@ -113,9 +118,207 @@ def plot_boyd_kleinman_vs_delta_k(
     return fig
 
 
+def plot_bk_master_map_sigma_xi(bk_data: dict):
+    """Plot the BK master map ``h_BK(sigma, xi)`` with its numerical optimum."""
+    sigma_values = np.asarray(bk_data["bk_master_sigma_values"], dtype=float)
+    xi_values = np.asarray(bk_data["bk_master_xi_values"], dtype=float)
+    h_bk_map = np.asarray(bk_data["bk_master_h_map"], dtype=float)
+    sigma_opt = float(bk_data["bk_master_sigma_opt"])
+    xi_opt = float(bk_data["bk_master_xi_opt"])
+    h_bk_opt = float(bk_data["bk_master_h_opt"])
+
+    sigma_grid, xi_grid = np.meshgrid(sigma_values, xi_values)
+    fig, ax = plt.subplots(figsize=(8.6, 6.6))
+    contourf = ax.contourf(sigma_grid, xi_grid, h_bk_map, levels=18, cmap="viridis")
+    ax.contour(sigma_grid, xi_grid, h_bk_map, levels=10, colors="black", linewidths=0.6, alpha=0.4)
+    ax.plot(sigma_opt, xi_opt, marker="x", color="black", markersize=10, mew=2.2)
+    ax.set_xlabel(r"Phase mismatch factor: $\sigma$")
+    ax.set_ylabel(r"Focusing strength factor: $\xi$")
+    ax.set_title(r"Boyd-Kleinman master map $h_{\mathrm{BK}}(\sigma,\xi)$", pad=10)
+    ax.set_facecolor("#f7fbf6")
+    ax.grid(True, color="#bdd7c0", alpha=0.35, linewidth=0.7)
+
+    text = (
+        rf"$\sigma_m = {sigma_opt:.3f}$" "\n"
+        rf"$\xi_m = {xi_opt:.3f}$" "\n"
+        rf"$h_{{\mathrm{{BK}}}}(\sigma_m,\xi_m) = {h_bk_opt:.3f}$"
+    )
+    ax.text(
+        0.98,
+        0.04,
+        text,
+        transform=ax.transAxes,
+        ha="right",
+        va="bottom",
+        fontsize=10,
+        bbox={"facecolor": "white", "edgecolor": "#7b8f7a", "alpha": 0.92, "boxstyle": "round,pad=0.3"},
+    )
+
+    cbar = fig.colorbar(contourf, ax=ax, pad=0.02)
+    cbar.set_label(r"BK factor: $h_{\mathrm{BK}}(\sigma,\xi)$")
+    fig.tight_layout()
+    return fig
+
+
+def plot_qpm_length_poling_map(bk_data: dict):
+    """Plot the QPM length/poling guide curves and 2D log-scale intensity map."""
+    length_over_lcoh = np.asarray(bk_data["qpm_length_over_lcoh"], dtype=float)
+    poling_over_lcoh = np.asarray(bk_data["qpm_poling_over_lcoh"], dtype=float)
+    relative_field_intensity = np.asarray(bk_data["qpm_relative_field_intensity"], dtype=float)
+    slice_values_over_lcoh = np.asarray(bk_data["qpm_slice_values_over_lcoh"], dtype=float)
+    slice_curves = np.asarray(bk_data["qpm_slice_curves"], dtype=float)
+    if "qpm_first_order_qpm_guide_over_lcoh" in bk_data:
+        first_order_qpm_guide_over_lcoh = np.asarray(
+            bk_data["qpm_first_order_qpm_guide_over_lcoh"],
+            dtype=float,
+        )
+    else:
+        first_order_qpm_guide_over_lcoh = np.asarray(
+            bk_data["qpm_delta_k0_curve_over_lcoh"],
+            dtype=float,
+        )
+
+    fig, (ax_top, ax_bottom) = plt.subplots(
+        2,
+        1,
+        figsize=(9.2, 8.0),
+        sharex=True,
+        gridspec_kw={"height_ratios": (1.0, 1.35), "hspace": 0.08},
+    )
+
+    colors = plt.cm.viridis(np.linspace(0.2, 0.9, len(slice_values_over_lcoh)))
+    for i_slice, slice_value in enumerate(slice_values_over_lcoh):
+        ax_top.plot(
+            length_over_lcoh,
+            slice_curves[i_slice],
+            color=colors[i_slice],
+            lw=2.5,
+            label=rf"$\Lambda_{{pol}}/l_{{coh}} = {slice_value:.0f}$",
+        )
+    guide_curve = np.empty_like(length_over_lcoh)
+    for i_length, poling_value in enumerate(first_order_qpm_guide_over_lcoh):
+        poling_index = int(np.argmin(np.abs(poling_over_lcoh - poling_value)))
+        guide_curve[i_length] = relative_field_intensity[poling_index, i_length]
+    ax_top.plot(
+        length_over_lcoh,
+        guide_curve,
+        color="black",
+        lw=1.8,
+        ls="--",
+        label=r"1st-order QPM guide: $\Lambda_{pol}/l_{coh} = 2$",
+    )
+    ax_top.set_ylabel("Relative field intensity")
+    ax_top.set_title("QPM / poling-length map", pad=8)
+    ax_top.grid(True, color="#cfcfcf", alpha=0.6, linewidth=0.7)
+    ax_top.legend(frameon=False, fontsize=9, loc="upper right")
+
+    intensity_for_plot = np.clip(relative_field_intensity, 1e-6, None)
+    mesh = ax_bottom.pcolormesh(
+        length_over_lcoh,
+        poling_over_lcoh,
+        intensity_for_plot,
+        shading="auto",
+        cmap="viridis",
+        norm=LogNorm(vmin=1e-6, vmax=max(1.0, float(np.nanmax(intensity_for_plot)))),
+    )
+    ax_bottom.plot(length_over_lcoh, first_order_qpm_guide_over_lcoh, color="black", lw=1.8, ls="--")
+    ax_bottom.set_xlabel(r"Crystal length: $l_{cry} / l_{coh}$")
+    ax_bottom.set_ylabel(r"Poling period: $\Lambda_{pol} / l_{coh}$")
+    ax_bottom.grid(True, color="#c7d9c8", alpha=0.22, linewidth=0.5)
+
+    cbar = fig.colorbar(mesh, ax=ax_bottom, pad=0.02)
+    cbar.set_label("Relative field intensity")
+    fig.tight_layout()
+    return fig
+
+
+def plot_boyd_kleinman_analysis(bk_data: dict):
+    """Plot a 2x2 publication-style Boyd-Kleinman analysis figure.
+
+    All sweep definitions and BK values must be precomputed in the workflow
+    layer and passed through ``bk_data``.
+    """
+    temperature_C = np.asarray(
+        bk_data.get("temperature_C", np.asarray(bk_data["temperature_K"], dtype=float) - 273.15),
+        dtype=float,
+    )
+    crystal_lengths_m = np.asarray(bk_data["crystal_lengths_m"], dtype=float)
+    rayleigh_ranges_m = np.asarray(bk_data["rayleigh_ranges_m"], dtype=float)
+    wavelength_m = np.asarray(bk_data["wavelength_m"], dtype=float)
+    delta_lambda_m = np.asarray(bk_data["delta_lambda_m"], dtype=float)
+
+    bk_temp_lengths = np.asarray(bk_data["bk_vs_temperature_for_lengths"], dtype=float)
+    bk_wave_lengths = np.asarray(bk_data["bk_vs_wavelength_for_lengths"], dtype=float)
+    bk_temp_rayleigh = np.asarray(bk_data["bk_vs_temperature_for_rayleigh_ranges"], dtype=float)
+    bk_detuning_lengths = np.asarray(bk_data["bk_vs_delta_lambda_for_lengths"], dtype=float)
+
+    greens = plt.cm.Greens(np.linspace(0.45, 0.9, max(len(crystal_lengths_m), len(rayleigh_ranges_m))))
+    fig, axes = plt.subplots(2, 2, figsize=(12.8, 8.6), sharey=True)
+    axes = axes.ravel()
+
+    for idx, crystal_length_m in enumerate(crystal_lengths_m):
+        color = greens[idx]
+        label = rf"$L = {crystal_length_m * 1e3:.0f}\,\mathrm{{mm}}$"
+        axes[0].plot(temperature_C, bk_temp_lengths[idx], lw=2.8, color=color, label=label)
+        axes[1].plot(wavelength_m * 1e9, bk_wave_lengths[idx], lw=2.8, color=color, label=label)
+        axes[3].plot(delta_lambda_m * 1e9, bk_detuning_lengths[idx], lw=2.8, color=color, label=label)
+
+    for idx, rayleigh_range_m in enumerate(rayleigh_ranges_m):
+        color = greens[idx]
+        label = rf"$z_R = {rayleigh_range_m * 1e3:.0f}\,\mathrm{{mm}}$"
+        axes[2].plot(temperature_C, bk_temp_rayleigh[idx], lw=2.8, color=color, label=label)
+
+    title_kwargs = {"fontsize": 13, "fontweight": "semibold", "pad": 10}
+
+    axes[0].set_title(r"$h$ vs temperature for varying $L$", **title_kwargs)
+    axes[0].set_xlabel("Temperature [°C]")
+    axes[0].set_ylabel(r"BK-$h$ factor")
+
+    axes[1].set_title(r"$h$ vs central wavelength $\lambda_0$", **title_kwargs)
+    axes[1].set_xlabel(r"Wavelength: $\lambda_0$ [nm]")
+
+    axes[2].set_title(r"$h$ vs temperature for varying $z_R$", **title_kwargs)
+    axes[2].set_xlabel("Temperature [°C]")
+    axes[2].set_ylabel(r"BK-$h$ factor")
+
+    axes[3].set_title(r"$h$ vs wavelength detuning $\delta\lambda$", **title_kwargs)
+    axes[3].set_xlabel(r"Wavelength: $\delta\lambda$ [nm]")
+
+    for ax in axes:
+        ax.set_facecolor("#f7fbf6")
+        ax.grid(True, color="#bdd7c0", alpha=0.45, linewidth=0.8)
+        ax.minorticks_on()
+        ax.grid(which="minor", color="#e0eee0", alpha=0.35, linewidth=0.5)
+        ax.tick_params(labelsize=10)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        ax.spines["left"].set_color("#4d6b50")
+        ax.spines["bottom"].set_color("#4d6b50")
+        ax.legend(frameon=False, fontsize=9, loc="best", handlelength=2.8)
+
+    y_max = float(
+        np.nanmax(
+            [
+                np.nanmax(bk_temp_lengths),
+                np.nanmax(bk_wave_lengths),
+                np.nanmax(bk_temp_rayleigh),
+                np.nanmax(bk_detuning_lengths),
+            ]
+        )
+    )
+    for ax in axes:
+        ax.set_ylim(0.0, 1.05 * y_max if y_max > 0.0 else 1.0)
+
+    fig.subplots_adjust(left=0.08, right=0.98, bottom=0.09, top=0.92, wspace=0.16, hspace=0.24)
+    return fig
+
+
 __all__ = [
     "plot_phase_matching_temperature_scan",
     "plot_mode_matching_summary",
     "plot_boyd_kleinman_vs_focusing_parameter",
     "plot_boyd_kleinman_vs_delta_k",
+    "plot_bk_master_map_sigma_xi",
+    "plot_qpm_length_poling_map",
+    "plot_boyd_kleinman_analysis",
 ]
