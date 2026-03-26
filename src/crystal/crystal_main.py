@@ -2,8 +2,8 @@
 """
 Main entry point for crystal simulation.
 
-This script orchestrates the crystal simulation workflow:
-cavity context -> phase matching -> mode matching -> nonlinear efficiency -> export
+This script orchestrates the crystal simulation workflow
+linear efficiency -> export
 """
 
 from __future__ import annotations

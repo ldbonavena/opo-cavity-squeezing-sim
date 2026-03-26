@@ -383,6 +383,9 @@ class BKAnalysisResult:
     qpm_slice_values_over_lcoh: np.ndarray
     qpm_slice_curves: np.ndarray
     qpm_first_order_qpm_guide_over_lcoh: np.ndarray
+    qpm_operating_length_over_lcoh: float
+    qpm_operating_poling_over_lcoh: float
+    qpm_reference_in_display_range: bool
     temperature_K: np.ndarray
     temperature_C: np.ndarray
     crystal_lengths_m: np.ndarray
@@ -466,29 +469,39 @@ def compute_bk_master_map(
 
 def compute_qpm_length_poling_map(
     length_over_lcoh: np.ndarray,
-    poling_over_lcoh: np.ndarray,
+    poling_domain_length_over_lcoh: np.ndarray,
     n_z: int = 4000,
     slice_values_over_lcoh: tuple[float, ...] = (1.0, 3.0, 5.0),
 ) -> dict[str, np.ndarray]:
-    """Compute a normalized QPM map in ``(l_cry/l_coh, Lambda_pol/l_coh)``.
+    """Compute a universal QPM map using the thesis domain-length convention.
 
-    Normalized units use ``l_coh = 1`` and ``delta_k = pi``.
+    The plotted ``Lambda_pol`` is the domain length, so the nonlinear
+    coefficient flips sign every ``Lambda_pol`` and the full grating period is
+    ``2 * Lambda_pol``. In this convention, odd-order QPM branches appear at
+    ``Lambda_pol / l_coh = 1, 3, 5, ...``.
+
+    The map is expressed in normalized coordinates ``L / l_coh`` and
+    ``Lambda_pol / l_coh``. Each point therefore corresponds to its own local
+    coherence length ``l_coh = pi / |Delta_k|`` and hence to a scanned mismatch
+    ``Delta_k``. In these local normalized units one can evaluate the integral
+    with ``Delta_k = pi`` without tying the map to one fixed physical system.
     """
     length_over_lcoh = np.asarray(length_over_lcoh, dtype=float)
-    poling_over_lcoh = np.asarray(poling_over_lcoh, dtype=float)
+    poling_domain_length_over_lcoh = np.asarray(poling_domain_length_over_lcoh, dtype=float)
     slice_values_over_lcoh_arr = np.asarray(slice_values_over_lcoh, dtype=float)
     delta_k = np.pi
+    poling_over_lcoh = poling_domain_length_over_lcoh
 
     relative_field_intensity = np.full((len(poling_over_lcoh), len(length_over_lcoh)), np.nan, dtype=float)
 
-    for i_poling, lambda_pol in enumerate(poling_over_lcoh):
-        if not np.isfinite(lambda_pol) or lambda_pol <= 0.0:
+    for i_poling, lambda_domain_over_lcoh in enumerate(poling_domain_length_over_lcoh):
+        if not np.isfinite(lambda_domain_over_lcoh) or lambda_domain_over_lcoh <= 0.0:
             continue
-        for i_length, crystal_length in enumerate(length_over_lcoh):
-            if not np.isfinite(crystal_length) or crystal_length <= 0.0:
+        for i_length, crystal_length_over_lcoh in enumerate(length_over_lcoh):
+            if not np.isfinite(crystal_length_over_lcoh) or crystal_length_over_lcoh <= 0.0:
                 continue
-            z = np.linspace(0.0, crystal_length, int(n_z), dtype=float)
-            domain_index = np.floor(2.0 * z / lambda_pol).astype(int)
+            z = np.linspace(0.0, crystal_length_over_lcoh, int(n_z), dtype=float)
+            domain_index = np.floor(z / lambda_domain_over_lcoh).astype(int)
             d = np.where(domain_index % 2 == 0, 1.0, -1.0)
             field = np.trapz(d * np.exp(1j * delta_k * z), z)
             relative_field_intensity[i_poling, i_length] = float(np.abs(field) ** 2)
@@ -504,10 +517,10 @@ def compute_qpm_length_poling_map(
         slice_index = int(np.argmin(np.abs(poling_over_lcoh - slice_value)))
         slice_curves[i_slice] = relative_field_intensity[slice_index]
 
-    # In the normalization l_coh = pi / |Delta_k|,
-    # first-order QPM gives Lambda_pol / l_coh = 2.
+    # In the normalization l_coh = pi / |Delta_k| and using the domain-length
+    # convention, first-order QPM gives Lambda_pol / l_coh = 1.
     # This is a QPM compensation condition, NOT Delta_k = 0.
-    first_order_qpm_guide_over_lcoh = np.full_like(length_over_lcoh, 2.0, dtype=float)
+    first_order_qpm_guide_over_lcoh = np.full_like(length_over_lcoh, 1.0, dtype=float)
 
     return {
         "length_over_lcoh": length_over_lcoh,
@@ -673,6 +686,17 @@ def _build_reference_metadata(
             ).delta_k_eff_rad_per_m,
         )
     )
+    delta_k_bulk_reference_rad_per_m = float(
+        delta_k_three_wave(
+            wavelength_p_m=wavelength_p_m,
+            wavelength_s_m=wavelength_s_m,
+            wavelength_i_m=wavelength_i_m,
+            n_p=float(n_p_of_T(temperature_opt_K)),
+            n_s=float(n_s_of_T(temperature_opt_K)),
+            n_i=float(n_i_of_T(temperature_opt_K)),
+        )
+    )
+    l_coh_reference_m = float(np.pi / abs(delta_k_bulk_reference_rad_per_m)) if delta_k_bulk_reference_rad_per_m != 0.0 else np.nan
 
     return {
         "T0_K": float(T0_K),
@@ -693,6 +717,8 @@ def _build_reference_metadata(
         "zR_m_reference": float(zR_m_reference),
         "xi_reference": float(xi_reference),
         "sigma_reference": float(sigma_reference),
+        "delta_k_bulk_reference_rad_per_m": float(delta_k_bulk_reference_rad_per_m),
+        "l_coh_reference_m": float(l_coh_reference_m),
         "xi_baseline_from_reference_length_and_zR": float(xi_reference),
         "sigma_baseline_from_reference_zR_and_optimum": float(sigma_reference),
         "bk_quantity": "normalized BK focusing factor h_BK",
@@ -771,8 +797,18 @@ def run_bk_analysis(
         crystal_length_m=1.0,
     )
     qpm_map = compute_qpm_length_poling_map(
-        length_over_lcoh=np.linspace(0.0, bk_config.qpm_length_max_over_lcoh, int(bk_config.qpm_n_length), dtype=float),
-        poling_over_lcoh=np.linspace(0.1, bk_config.qpm_poling_max_over_lcoh, int(bk_config.qpm_n_poling), dtype=float),
+        length_over_lcoh=np.linspace(
+            0.0,
+            bk_config.qpm_length_max_over_lcoh,
+            int(bk_config.qpm_n_length),
+            dtype=float,
+        ),
+        poling_domain_length_over_lcoh=np.linspace(
+            0.1,
+            bk_config.qpm_poling_max_over_lcoh,
+            int(bk_config.qpm_n_poling),
+            dtype=float,
+        ),
         n_z=bk_config.qpm_n_z,
         slice_values_over_lcoh=bk_config.qpm_slice_values_over_lcoh,
     )
@@ -880,6 +916,18 @@ def run_bk_analysis(
         qpm_slice_values_over_lcoh=np.asarray(qpm_map["slice_values_over_lcoh"], dtype=float),
         qpm_slice_curves=np.asarray(qpm_map["slice_curves"], dtype=float),
         qpm_first_order_qpm_guide_over_lcoh=np.asarray(qpm_map["first_order_qpm_guide_over_lcoh"], dtype=float),
+        qpm_operating_length_over_lcoh=float(
+            context.crystal_length_m / reference["l_coh_reference_m"]
+        ),
+        qpm_operating_poling_over_lcoh=float(
+            (0.5 * reference_state["lambda_reference_m"]) / reference["l_coh_reference_m"]
+        ),
+        qpm_reference_in_display_range=bool(
+            np.isfinite(context.crystal_length_m / reference["l_coh_reference_m"])
+            and np.isfinite((0.5 * reference_state["lambda_reference_m"]) / reference["l_coh_reference_m"])
+            and 0.0 <= (context.crystal_length_m / reference["l_coh_reference_m"]) <= float(np.nanmax(qpm_map["length_over_lcoh"]))
+            and 0.0 <= ((0.5 * reference_state["lambda_reference_m"]) / reference["l_coh_reference_m"]) <= float(np.nanmax(qpm_map["poling_over_lcoh"]))
+        ),
         temperature_K=temperature_grid,
         temperature_C=temperature_grid_C,
         crystal_lengths_m=crystal_lengths_arr,

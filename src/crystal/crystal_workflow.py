@@ -93,6 +93,21 @@ def _phase_matching_scan_to_output(scan: dict[str, Any]) -> dict[str, Any]:
     return {key: (value.tolist() if isinstance(value, np.ndarray) else value) for key, value in scan.items()}
 
 
+def _to_json_compatible(value: Any) -> Any:
+    """Recursively convert NumPy-heavy workflow payloads into JSON-safe types."""
+    if isinstance(value, dict):
+        return {key: _to_json_compatible(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_to_json_compatible(item) for item in value]
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, Path):
+        return str(value)
+    return value
+
+
 def compute_crystal_phase_matching(
     context: CrystalContext,
     n_p_of_T: Callable[[float], float],
@@ -366,7 +381,7 @@ def save_crystal_outputs(
             return str(path)
 
     with json_path.open("w", encoding="utf-8") as f:
-        json.dump(output, f, indent=2)
+        json.dump(_to_json_compatible(output), f, indent=2)
 
     # Remove legacy plot files so the crystal results directory reflects the
     # current single-figure BK workflow after a fresh save.

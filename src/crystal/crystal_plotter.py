@@ -161,7 +161,7 @@ def plot_bk_master_map_sigma_xi(bk_data: dict):
 
 
 def plot_qpm_length_poling_map(bk_data: dict):
-    """Plot the QPM length/poling guide curves and 2D log-scale intensity map."""
+    """Plot the universal QPM length/poling map with optional operating-point overlay."""
     length_over_lcoh = np.asarray(bk_data["qpm_length_over_lcoh"], dtype=float)
     poling_over_lcoh = np.asarray(bk_data["qpm_poling_over_lcoh"], dtype=float)
     relative_field_intensity = np.asarray(bk_data["qpm_relative_field_intensity"], dtype=float)
@@ -177,6 +177,24 @@ def plot_qpm_length_poling_map(bk_data: dict):
             bk_data["qpm_delta_k0_curve_over_lcoh"],
             dtype=float,
         )
+    operating_length_over_lcoh = float(
+        bk_data.get(
+            "qpm_operating_length_over_lcoh",
+            bk_data.get("reference", {}).get("crystal_length_reference_m", np.nan),
+        )
+    )
+    operating_poling_over_lcoh = float(
+        bk_data.get("qpm_operating_poling_over_lcoh", np.nan)
+    )
+    reference_in_display_range = bool(
+        bk_data.get(
+            "qpm_reference_in_display_range",
+            np.isfinite(operating_length_over_lcoh)
+            and np.isfinite(operating_poling_over_lcoh)
+            and 0.0 <= operating_length_over_lcoh <= float(np.nanmax(length_over_lcoh))
+            and 0.0 <= operating_poling_over_lcoh <= float(np.nanmax(poling_over_lcoh)),
+        )
+    )
 
     fig, (ax_top, ax_bottom) = plt.subplots(
         2,
@@ -192,7 +210,7 @@ def plot_qpm_length_poling_map(bk_data: dict):
             length_over_lcoh,
             slice_curves[i_slice],
             color=colors[i_slice],
-            lw=2.5,
+            lw=2.7,
             label=rf"$\Lambda_{{pol}}/l_{{coh}} = {slice_value:.0f}$",
         )
     guide_curve = np.empty_like(length_over_lcoh)
@@ -203,14 +221,18 @@ def plot_qpm_length_poling_map(bk_data: dict):
         length_over_lcoh,
         guide_curve,
         color="black",
-        lw=1.8,
+        lw=2.2,
         ls="--",
-        label=r"1st-order QPM guide: $\Lambda_{pol}/l_{coh} = 2$",
     )
     ax_top.set_ylabel("Relative field intensity")
     ax_top.set_title("QPM / poling-length map", pad=8)
-    ax_top.grid(True, color="#cfcfcf", alpha=0.6, linewidth=0.7)
-    ax_top.legend(frameon=False, fontsize=9, loc="upper right")
+    ax_top.grid(True, color="#cfcfcf", alpha=0.28, linewidth=0.7)
+    ax_top.tick_params(axis="x", labelbottom=False)
+    ax_top.legend(
+        frameon=False,
+        fontsize=9,
+        loc="upper right",
+    )
 
     intensity_for_plot = np.clip(relative_field_intensity, 1e-6, None)
     mesh = ax_bottom.pcolormesh(
@@ -221,14 +243,42 @@ def plot_qpm_length_poling_map(bk_data: dict):
         cmap="viridis",
         norm=LogNorm(vmin=1e-6, vmax=max(1.0, float(np.nanmax(intensity_for_plot)))),
     )
-    ax_bottom.plot(length_over_lcoh, first_order_qpm_guide_over_lcoh, color="black", lw=1.8, ls="--")
+    x_min = float(np.nanmin(length_over_lcoh))
+    x_max = float(np.nanmax(length_over_lcoh))
+    if reference_in_display_range and np.isfinite(operating_length_over_lcoh) and np.isfinite(operating_poling_over_lcoh):
+        ax_bottom.plot(
+            operating_length_over_lcoh,
+            operating_poling_over_lcoh,
+            marker="o",
+            ms=8,
+            mfc="#d1495b",
+            mec="white",
+            mew=1.0,
+            linestyle="None",
+            label="Operating point",
+        )
+        ax_bottom.annotate(
+            "Operating point",
+            xy=(operating_length_over_lcoh, operating_poling_over_lcoh),
+            xytext=(6, 6),
+            textcoords="offset points",
+            ha="left",
+            va="bottom",
+            fontsize=9,
+            bbox={"facecolor": "white", "edgecolor": "#c0c0c0", "alpha": 0.9, "boxstyle": "round,pad=0.2"},
+        )
     ax_bottom.set_xlabel(r"Crystal length: $l_{cry} / l_{coh}$")
     ax_bottom.set_ylabel(r"Poling period: $\Lambda_{pol} / l_{coh}$")
-    ax_bottom.grid(True, color="#c7d9c8", alpha=0.22, linewidth=0.5)
+    ax_bottom.grid(True, color="#c7d9c8", alpha=0.24, linewidth=0.5)
+    ax_bottom.set_xlim(x_min, x_max)
+    if reference_in_display_range and np.isfinite(operating_length_over_lcoh) and np.isfinite(operating_poling_over_lcoh):
+        ax_bottom.legend(frameon=False, fontsize=9, loc="upper right")
 
     cbar = fig.colorbar(mesh, ax=ax_bottom, pad=0.02)
     cbar.set_label("Relative field intensity")
-    fig.tight_layout()
+    cbar.ax.tick_params(labelsize=10)
+    fig.align_ylabels((ax_top, ax_bottom))
+    fig.tight_layout(rect=(0.0, 0.0, 0.86, 1.0))
     return fig
 
 
