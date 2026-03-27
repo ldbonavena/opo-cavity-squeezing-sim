@@ -2,8 +2,8 @@
 """
 Main entry point for crystal simulation.
 
-This script orchestrates the crystal simulation workflow
-linear efficiency -> export
+This script orchestrates the crystal simulation workflow:
+cavity → crystal → phase matching → mode matching → BK analysis → plots → export.
 """
 
 from __future__ import annotations
@@ -227,8 +227,6 @@ bk_data = compute_boyd_kleinman_analysis(
     wavelength_s_m=WAVELENGTH_S_M,
     wavelength_i_m=WAVELENGTH_I_M,
     Lambda0_m=Lambda0_m,
-    T_min_K=T_MIN_K,
-    T_max_K=T_MAX_K,
     n_T=N_T,
     T0_K=T0_K,
     alpha_perK=ALPHA_PER_K,
@@ -265,7 +263,13 @@ if design_poling is not None:
 # %%
 # Generate plots
 
-fig_bk_master = plot_bk_master_map_sigma_xi(bk_data)
+fig_bk_master = plot_bk_master_map_sigma_xi(
+    bk_data,
+    operating_point={
+        "xi_reference": bk_data["reference"]["xi_reference"],
+        "sigma_reference": bk_data["reference"]["sigma_reference"],
+    },
+)
 fig_qpm = plot_qpm_length_poling_map(bk_data)
 fig_bk = plot_boyd_kleinman_analysis(bk_data)
 

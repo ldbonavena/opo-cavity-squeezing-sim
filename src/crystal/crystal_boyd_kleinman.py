@@ -10,6 +10,10 @@ import numpy as np
 from .crystal_phase_matching import delta_k_eff_T, delta_k_qpm, delta_k_three_wave, poling_period_T
 
 
+# NumPy 2 removed ``np.trapz``; keep compatibility with both old and new releases.
+_TRAPEZOID = np.trapezoid if hasattr(np, "trapezoid") else np.trapz
+
+
 # BK core physics
 
 
@@ -54,7 +58,7 @@ def boyd_kleinman_integral(
     z_r = crystal_length_m / (2.0 * xi)
     z = np.linspace(-0.5 * crystal_length_m, 0.5 * crystal_length_m, int(n_points))
     integrand = np.exp(1j * delta_k * z) / (1.0 + 1j * z / z_r)
-    return complex(np.trapz(integrand, z) / crystal_length_m)
+    return complex(_TRAPEZOID(integrand, z) / crystal_length_m)
 
 
 def boyd_kleinman_efficiency(
@@ -503,7 +507,7 @@ def compute_qpm_length_poling_map(
             z = np.linspace(0.0, crystal_length_over_lcoh, int(n_z), dtype=float)
             domain_index = np.floor(z / lambda_domain_over_lcoh).astype(int)
             d = np.where(domain_index % 2 == 0, 1.0, -1.0)
-            field = np.trapz(d * np.exp(1j * delta_k * z), z)
+            field = _TRAPEZOID(d * np.exp(1j * delta_k * z), z)
             relative_field_intensity[i_poling, i_length] = float(np.abs(field) ** 2)
 
     peak = float(np.nanmax(relative_field_intensity))
@@ -713,7 +717,7 @@ def _build_reference_metadata(
         "Lambda0_analysis_m": float(lambda_reference_m),
         "crystal_length_m": float(context.crystal_length_m),
         "crystal_length_reference_m": float(crystal_length_reference_m),
-        "rayleigh_range_m": float(mode_matching.rayleigh_range_m),
+        "rayleigh_range_m": float(zR_m_reference),
         "zR_m_reference": float(zR_m_reference),
         "xi_reference": float(xi_reference),
         "sigma_reference": float(sigma_reference),
@@ -953,15 +957,6 @@ __all__ = [
     "beam_waist_from_rayleigh_range",
     "boyd_kleinman_integral",
     "boyd_kleinman_efficiency",
-    "normalize_curve",
-    "normalize_curve_set",
-    "idler_wavelength_from_energy_conservation",
-    "resolve_bk_reference_period",
-    "evaluate_bk_h",
-    "compute_bk_vs_temperature_for_lengths",
-    "compute_bk_vs_temperature_for_rayleigh_ranges",
-    "compute_bk_vs_wavelength_for_lengths",
-    "compute_bk_vs_detuning_for_lengths",
     "BKAnalysisConfig",
     "BKAnalysisResult",
     "bk_analysis_result_to_dict",

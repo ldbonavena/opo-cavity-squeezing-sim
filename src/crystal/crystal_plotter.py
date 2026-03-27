@@ -64,7 +64,10 @@ def plot_boyd_kleinman_vs_focusing_parameter(
     crystal_length_m: float,
     delta_k_rad_per_m: float,
 ):
-    """Plot BK efficiency factor versus focusing parameter."""
+    """Plot BK efficiency factor versus focusing parameter.
+
+    Deprecated legacy helper kept for compatibility with old notebooks.
+    """
     xi_values = np.asarray(xi_values, dtype=float)
     eff = np.empty_like(xi_values)
     for i, xi in enumerate(xi_values):
@@ -73,7 +76,6 @@ def plot_boyd_kleinman_vs_focusing_parameter(
             continue
         z_r = crystal_length_m / (2.0 * xi)
         eff[i] = boyd_kleinman_efficiency(
-            waist_m=1.0,
             rayleigh_range_m=z_r,
             crystal_length_m=crystal_length_m,
             delta_k=delta_k_rad_per_m,
@@ -94,12 +96,16 @@ def plot_boyd_kleinman_vs_delta_k(
     rayleigh_range_m: float,
     crystal_length_m: float,
 ):
-    """Plot BK efficiency factor versus phase mismatch Δk."""
+    """Plot BK efficiency factor versus phase mismatch Δk.
+
+    Deprecated legacy helper kept for compatibility with old notebooks.
+    The ``waist_m`` argument is ignored and kept only for API stability.
+    """
+    _ = waist_m
     delta_k_values = np.asarray(delta_k_values, dtype=float)
     eff = np.array(
         [
             boyd_kleinman_efficiency(
-                waist_m=waist_m,
                 rayleigh_range_m=rayleigh_range_m,
                 crystal_length_m=crystal_length_m,
                 delta_k=dk,
@@ -118,7 +124,10 @@ def plot_boyd_kleinman_vs_delta_k(
     return fig
 
 
-def plot_bk_master_map_sigma_xi(bk_data: dict):
+def plot_bk_master_map_sigma_xi(
+    bk_data: dict,
+    operating_point: dict | None = None,
+):
     """Plot the BK master map ``h_BK(sigma, xi)`` with its numerical optimum."""
     sigma_values = np.asarray(bk_data["bk_master_sigma_values"], dtype=float)
     xi_values = np.asarray(bk_data["bk_master_xi_values"], dtype=float)
@@ -131,24 +140,80 @@ def plot_bk_master_map_sigma_xi(bk_data: dict):
     fig, ax = plt.subplots(figsize=(8.6, 6.6))
     contourf = ax.contourf(sigma_grid, xi_grid, h_bk_map, levels=18, cmap="viridis")
     ax.contour(sigma_grid, xi_grid, h_bk_map, levels=10, colors="black", linewidths=0.6, alpha=0.4)
-    ax.plot(sigma_opt, xi_opt, marker="x", color="black", markersize=10, mew=2.2)
+    ax.scatter(
+        sigma_opt,
+        xi_opt,
+        marker="x",
+        color="black",
+        s=100,
+        label="Optimal BK point",
+        zorder=6,
+    )
     ax.set_xlabel(r"Phase mismatch factor: $\sigma$")
     ax.set_ylabel(r"Focusing strength factor: $\xi$")
     ax.set_title(r"Boyd-Kleinman master map $h_{\mathrm{BK}}(\sigma,\xi)$", pad=10)
     ax.set_facecolor("#f7fbf6")
     ax.grid(True, color="#bdd7c0", alpha=0.35, linewidth=0.7)
 
+    sigma_reference_value: float | None = None
+    xi_reference_value: float | None = None
+    h_bk_operating: float | None = None
+    if operating_point is not None:
+        sigma_reference = operating_point.get("sigma_reference")
+        xi_reference = operating_point.get("xi_reference")
+        if sigma_reference is not None and xi_reference is not None:
+            sigma_reference = float(sigma_reference)
+            xi_reference = float(xi_reference)
+            if np.isfinite(sigma_reference) and np.isfinite(xi_reference):
+                sigma_reference_value = sigma_reference
+                xi_reference_value = xi_reference
+                i_sigma_ref = int(np.argmin(np.abs(sigma_values - sigma_reference)))
+                i_xi_ref = int(np.argmin(np.abs(xi_values - xi_reference)))
+                h_bk_operating = float(h_bk_map[i_xi_ref, i_sigma_ref])
+                ax.scatter(
+                    sigma_reference,
+                    xi_reference,
+                    color="red",
+                    s=80,
+                    label="Operating point",
+                    zorder=6,
+                )
+    handles, labels = ax.get_legend_handles_labels()
+    if handles:
+        unique_handles: list = []
+        unique_labels: list[str] = []
+        for handle, label in zip(handles, labels):
+            if label not in unique_labels:
+                unique_handles.append(handle)
+                unique_labels.append(label)
+        ax.legend(unique_handles, unique_labels, loc="upper right")
+
     text = (
+        "Optimal BK point\n"
         rf"$\sigma_m = {sigma_opt:.3f}$" "\n"
         rf"$\xi_m = {xi_opt:.3f}$" "\n"
         rf"$h_{{\mathrm{{BK}}}}(\sigma_m,\xi_m) = {h_bk_opt:.3f}$"
     )
+    if (
+        sigma_reference_value is not None
+        and xi_reference_value is not None
+        and h_bk_operating is not None
+        and np.isfinite(h_bk_operating)
+    ):
+        text += (
+            "\n\n"
+            "Operating point\n"
+            rf"$\sigma = {sigma_reference_value:.3f}$" "\n"
+            rf"$\xi = {xi_reference_value:.3f}$" "\n"
+            rf"$h_{{\mathrm{{BK}}}}(\sigma,\xi) = {h_bk_operating:.3f}$"
+        )
+
     ax.text(
-        0.98,
-        0.04,
+        0.02,
+        0.02,
         text,
         transform=ax.transAxes,
-        ha="right",
+        ha="left",
         va="bottom",
         fontsize=10,
         bbox={"facecolor": "white", "edgecolor": "#7b8f7a", "alpha": 0.92, "boxstyle": "round,pad=0.3"},

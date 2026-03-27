@@ -198,8 +198,6 @@ def compute_boyd_kleinman_analysis(
     wavelength_s_m: float,
     wavelength_i_m: float,
     Lambda0_m: float,
-    T_min_K: float,
-    T_max_K: float,
     n_T: int,
     T0_K: float = 293.15,
     alpha_perK: float = 0.0,
@@ -213,7 +211,6 @@ def compute_boyd_kleinman_analysis(
     sweeps, normalization, defaults, and metadata assembly to
     ``crystal_boyd_kleinman``.
     """
-    del T_min_K, T_max_K
     bk_result = run_bk_analysis(
         context=context,
         mode_matching=mode_matching,
@@ -275,15 +272,12 @@ def print_crystal_summary(result: CrystalSimulationResult) -> None:
         reference = bk_analysis.get("reference", {})
         sigma_reference = reference.get("sigma_reference")
         xi_reference = reference.get("xi_reference")
-        bk_reference_factor = reference.get("bk_reference_factor", mode.boyd_kleinman_factor)
         bk_master_sigma_opt = bk_analysis.get("bk_master_sigma_opt")
         bk_master_xi_opt = bk_analysis.get("bk_master_xi_opt")
         bk_master_h_opt = bk_analysis.get("bk_master_h_opt")
 
         if sigma_reference is not None and xi_reference is not None:
             print(f"BK reference point (sigma, xi): ({float(sigma_reference):.6f}, {float(xi_reference):.6f})")
-        if bk_reference_factor is not None:
-            print(f"BK reference factor: {float(bk_reference_factor):.6f}")
         if bk_master_sigma_opt is not None and bk_master_xi_opt is not None:
             print(
                 "BK master-map optimum (sigma, xi): "
