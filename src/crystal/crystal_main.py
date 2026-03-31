@@ -263,6 +263,7 @@ if design_poling is not None:
 # %%
 # Generate plots
 
+# BK figures: operating plot should be blue, optimal plot should be green.
 fig_bk_master = plot_bk_master_map_sigma_xi(
     bk_data,
     operating_point={
@@ -271,7 +272,18 @@ fig_bk_master = plot_bk_master_map_sigma_xi(
     },
 )
 fig_qpm = plot_qpm_length_poling_map(bk_data)
-fig_bk = plot_boyd_kleinman_analysis(bk_data)
+bk_analysis_operating = bk_data.get("bk_analysis_operating", bk_data)
+bk_analysis_optimal = bk_data.get("bk_analysis_optimal")
+fig_bk = plot_boyd_kleinman_analysis(
+    bk_analysis_operating,
+    figure_title="BK Analysis Around Operating Point",
+)
+fig_bk_optimal = None
+if bk_analysis_optimal is not None:
+    fig_bk_optimal = plot_boyd_kleinman_analysis(
+        bk_analysis_optimal,
+        figure_title="BK Analysis Around Optimal BK Point",
+    )
 
 # %%
 # Save outputs
@@ -284,11 +296,14 @@ if SAVE_OUTPUTS:
         fig_bk_master=fig_bk_master,
         fig_qpm=fig_qpm,
         fig_bk=fig_bk,
+        fig_bk_optimal=fig_bk_optimal,
     )
     print(f"Saved crystal output to: {outputs_info['crystal_output_json']}")
     print(f"Saved BK master map to: {outputs_info['boyd_kleinman_master_map_png']}")
     print(f"Saved QPM / poling-length map to: {outputs_info['qpm_length_poling_map_png']}")
     print(f"Saved BK analysis plot to: {outputs_info['boyd_kleinman_analysis_png']}")
+    if "boyd_kleinman_analysis_optimal_png" in outputs_info:
+        print(f"Saved optimal BK analysis plot to: {outputs_info['boyd_kleinman_analysis_optimal_png']}")
 
 # %%
 # Build mode-matching context

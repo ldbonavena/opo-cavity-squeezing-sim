@@ -44,6 +44,11 @@ def get_crystal_results_dir(geometry: str, results_root: str | Path | None = Non
     return get_geometry_results_subdir(geometry, "crystal", results_root=results_root)
 
 
+def get_opo_results_dir(geometry: str, results_root: str | Path | None = None) -> Path:
+    """Return the OPO results directory for a given geometry."""
+    return get_geometry_results_subdir(geometry, "opo", results_root=results_root)
+
+
 def get_geometry_results_subdir(
     geometry: str,
     subdir_name: str,

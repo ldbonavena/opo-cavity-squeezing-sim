@@ -26,6 +26,7 @@ from .crystal_boyd_kleinman import (
     BKAnalysisConfig,
     bk_analysis_result_to_dict,
     run_bk_analysis,
+    run_bk_analysis_pair,
 )
 from .crystal_phase_matching import compute_design_poling_period as compute_design_poling_period_from_material_model
 from .crystal_phase_matching import scan_phase_matching_vs_temperature
@@ -211,7 +212,7 @@ def compute_boyd_kleinman_analysis(
     sweeps, normalization, defaults, and metadata assembly to
     ``crystal_boyd_kleinman``.
     """
-    bk_result = run_bk_analysis(
+    bk_results = run_bk_analysis_pair(
         context=context,
         mode_matching=mode_matching,
         n_p_of_T=n_p_of_T,
@@ -231,7 +232,12 @@ def compute_boyd_kleinman_analysis(
         n_temperature=n_T,
         bk_config=bk_config,
     )
-    return bk_analysis_result_to_dict(bk_result)
+    bk_operating = bk_analysis_result_to_dict(bk_results["bk_analysis_operating"])
+    bk_optimal = bk_analysis_result_to_dict(bk_results["bk_analysis_optimal"])
+    payload = dict(bk_operating)
+    payload["bk_analysis_operating"] = bk_operating
+    payload["bk_analysis_optimal"] = bk_optimal
+    return payload
 
 
 def build_crystal_simulation_result(
@@ -324,6 +330,7 @@ def save_crystal_outputs(
     fig_bk=None,
     legacy_fig_unused=None,
     results_root: str | Path | None = None,
+    fig_bk_optimal=None,
 ) -> dict[str, str]:
     """Save crystal JSON and plots under ``results/<geometry>/crystal/``."""
     # Backward compatibility:
@@ -365,6 +372,7 @@ def save_crystal_outputs(
     bk_master_path = result_dir / "boyd_kleinman_master_map.png"
     qpm_path = result_dir / "qpm_length_poling_map.png"
     bk_path = result_dir / "boyd_kleinman_analysis.png"
+    bk_optimal_path = result_dir / "boyd_kleinman_analysis_optimal.png"
     old_phase_path = result_dir / "phase_matching_scan.png"
     old_mode_path = result_dir / "mode_matching_summary.png"
 
@@ -389,6 +397,8 @@ def save_crystal_outputs(
         fig_qpm.savefig(qpm_path, dpi=300, bbox_inches="tight")
     if fig_bk is not None:
         fig_bk.savefig(bk_path, dpi=300, bbox_inches="tight")
+    if fig_bk_optimal is not None:
+        fig_bk_optimal.savefig(bk_optimal_path, dpi=300, bbox_inches="tight")
 
     outputs = {
         "result_dir": _repo_relative(result_dir),
@@ -403,6 +413,8 @@ def save_crystal_outputs(
         outputs["boyd_kleinman_analysis_png"] = bk_relpath
         outputs["phase_matching_scan_png"] = bk_relpath
         outputs["mode_matching_summary_png"] = bk_relpath
+    if fig_bk_optimal is not None:
+        outputs["boyd_kleinman_analysis_optimal_png"] = _repo_relative(bk_optimal_path)
     return outputs
 
 

@@ -347,7 +347,7 @@ def plot_qpm_length_poling_map(bk_data: dict):
     return fig
 
 
-def plot_boyd_kleinman_analysis(bk_data: dict):
+def plot_boyd_kleinman_analysis(bk_data: dict, figure_title: str | None = None):
     """Plot a 2x2 publication-style Boyd-Kleinman analysis figure.
 
     All sweep definitions and BK values must be precomputed in the workflow
@@ -359,6 +359,10 @@ def plot_boyd_kleinman_analysis(bk_data: dict):
     )
     crystal_lengths_m = np.asarray(bk_data["crystal_lengths_m"], dtype=float)
     rayleigh_ranges_m = np.asarray(bk_data["rayleigh_ranges_m"], dtype=float)
+    crystal_length_reference_m = float(
+        bk_data["reference"].get("crystal_length_reference_m", crystal_lengths_m[0])
+    )
+    crystal_length_reference_mm = crystal_length_reference_m * 1e3
     wavelength_m = np.asarray(bk_data["wavelength_m"], dtype=float)
     delta_lambda_m = np.asarray(bk_data["delta_lambda_m"], dtype=float)
 
@@ -367,49 +371,52 @@ def plot_boyd_kleinman_analysis(bk_data: dict):
     bk_temp_rayleigh = np.asarray(bk_data["bk_vs_temperature_for_rayleigh_ranges"], dtype=float)
     bk_detuning_lengths = np.asarray(bk_data["bk_vs_delta_lambda_for_lengths"], dtype=float)
 
-    greens = plt.cm.Greens(np.linspace(0.45, 0.9, max(len(crystal_lengths_m), len(rayleigh_ranges_m))))
+    n_colors = max(len(crystal_lengths_m), len(rayleigh_ranges_m))
+    if figure_title is not None and "Operating" in figure_title:
+        colors = plt.cm.Blues(np.linspace(0.45, 0.9, n_colors))
+    else:
+        colors = plt.cm.Greens(np.linspace(0.45, 0.9, n_colors))
     fig, axes = plt.subplots(2, 2, figsize=(12.8, 8.6), sharey=True)
     axes = axes.ravel()
 
     for idx, crystal_length_m in enumerate(crystal_lengths_m):
-        color = greens[idx]
+        color = colors[idx]
         label = rf"$L = {crystal_length_m * 1e3:.0f}\,\mathrm{{mm}}$"
         axes[0].plot(temperature_C, bk_temp_lengths[idx], lw=2.8, color=color, label=label)
         axes[1].plot(wavelength_m * 1e9, bk_wave_lengths[idx], lw=2.8, color=color, label=label)
         axes[3].plot(delta_lambda_m * 1e9, bk_detuning_lengths[idx], lw=2.8, color=color, label=label)
 
     for idx, rayleigh_range_m in enumerate(rayleigh_ranges_m):
-        color = greens[idx]
+        color = colors[idx]
         label = rf"$z_R = {rayleigh_range_m * 1e3:.0f}\,\mathrm{{mm}}$"
         axes[2].plot(temperature_C, bk_temp_rayleigh[idx], lw=2.8, color=color, label=label)
 
     title_kwargs = {"fontsize": 13, "fontweight": "semibold", "pad": 10}
 
-    axes[0].set_title(r"$h$ vs temperature for varying $L$", **title_kwargs)
+    axes[0].set_title(r"$\lambda = \lambda_0,\; z_R = z_{R,m}$", **title_kwargs)
     axes[0].set_xlabel("Temperature [°C]")
     axes[0].set_ylabel(r"BK-$h$ factor")
 
-    axes[1].set_title(r"$h$ vs central wavelength $\lambda_0$", **title_kwargs)
+    axes[1].set_title(r"$z_R = z_{R,m},\; T = T_{\mathrm{opt}}$", **title_kwargs)
     axes[1].set_xlabel(r"Wavelength: $\lambda_0$ [nm]")
 
-    axes[2].set_title(r"$h$ vs temperature for varying $z_R$", **title_kwargs)
+    axes[2].set_title(
+        rf"$\lambda = \lambda_0,\; L_c = {crystal_length_reference_mm:.0f}\,\mathrm{{mm}}$",
+        **title_kwargs,
+    )
     axes[2].set_xlabel("Temperature [°C]")
     axes[2].set_ylabel(r"BK-$h$ factor")
 
-    axes[3].set_title(r"$h$ vs wavelength detuning $\delta\lambda$", **title_kwargs)
+    axes[3].set_title(r"$\lambda = \lambda_0 \pm \delta\lambda,\; z_R = z_{R,m},\; T = T_{\mathrm{opt}}$", **title_kwargs)
     axes[3].set_xlabel(r"Wavelength: $\delta\lambda$ [nm]")
 
     for ax in axes:
-        ax.set_facecolor("#f7fbf6")
-        ax.grid(True, color="#bdd7c0", alpha=0.45, linewidth=0.8)
-        ax.minorticks_on()
-        ax.grid(which="minor", color="#e0eee0", alpha=0.35, linewidth=0.5)
+        ax.set_facecolor("white")
+        ax.grid(True, color="#b0b0b0", alpha=0.5, linewidth=0.8)
         ax.tick_params(labelsize=10)
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-        ax.spines["left"].set_color("#4d6b50")
-        ax.spines["bottom"].set_color("#4d6b50")
-        ax.legend(frameon=False, fontsize=9, loc="best", handlelength=2.8)
+        ax.legend(frameon=True, facecolor="white", edgecolor="#cccccc", fontsize=9, loc="best")
 
     y_max = float(
         np.nanmax(
@@ -424,7 +431,11 @@ def plot_boyd_kleinman_analysis(bk_data: dict):
     for ax in axes:
         ax.set_ylim(0.0, 1.05 * y_max if y_max > 0.0 else 1.0)
 
-    fig.subplots_adjust(left=0.08, right=0.98, bottom=0.09, top=0.92, wspace=0.16, hspace=0.24)
+    if figure_title:
+        fig.suptitle(figure_title, fontsize=14, fontweight="semibold", y=0.98)
+        fig.subplots_adjust(left=0.08, right=0.98, bottom=0.09, top=0.89, wspace=0.16, hspace=0.35)
+    else:
+        fig.subplots_adjust(left=0.08, right=0.98, bottom=0.09, top=0.92, wspace=0.16, hspace=0.35)
     return fig
 
 
